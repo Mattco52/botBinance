@@ -42,18 +42,6 @@ def status():
     }), 200
 import requests
 
-def enviar_mensaje_telegram(mensaje):
-    try:
-        token = os.getenv("TELEGRAM_TOKEN")
-        chat_id = os.getenv("CHAT_ID")
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": mensaje}
-        response = requests.post(url, data=payload)
-        if response.status_code != 200:
-            print(f"❌ Error al enviar mensaje: {response.text}", flush=True)
-    except Exception as e:
-        print(f"❌ Excepción en enviar_mensaje_telegram: {e}", flush=True)
-
 # --- Función para enviar mensajes a Telegram --- #
 def enviar_mensaje_telegram(mensaje):
     token = os.getenv("TELEGRAM_TOKEN")
