@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator
 from flask import Flask, jsonify
+import requests
 
 # --- Cargar API keys --- #
 load_dotenv()
@@ -40,6 +41,23 @@ def status():
         'hora': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }), 200
 
+# --- Función para enviar mensajes a Telegram --- #
+def enviar_mensaje_telegram(mensaje):
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+
+    payload = {
+        "chat_id": chat_id,
+        "text": mensaje
+    }
+
+    try:
+        requests.post(url, data=payload)
+    except Exception as e:
+        print(f"❌ Error enviando mensaje Telegram: {e}", flush=True)
+
+# --- Indicadores técnicos --- #
 def calcular_indicadores():
     klines = client.get_historical_klines(
         symbol=PARAMS['symbol'],
@@ -60,6 +78,7 @@ def calcular_indicadores():
 
     return df.iloc[-1]
 
+# --- Lógica de trading --- #
 def ejecutar_estrategia():
     try:
         ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -74,6 +93,7 @@ def ejecutar_estrategia():
 
         if ema_ok and rsi_ok and precio_ok:
             print(f"[{ahora}] 🟢 COMPRA | Precio: {precio:.2f} | RSI: {ind['rsi']:.2f}", flush=True)
+            enviar_mensaje_telegram(f"🟢 COMPRA ejecutada\nPrecio: {precio:.2f}\nRSI: {ind['rsi']:.2f}")
 
             order = client.create_order(
                 symbol=PARAMS['symbol'],
@@ -95,6 +115,8 @@ def ejecutar_estrategia():
                 price=tp
             )
             print(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl}", flush=True)
+            enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
+
         else:
             print(f"[{ahora}] 🔴 Sin señal | EMA9: {ind['ema9']:.2f} > EMA21: {ind['ema21']:.2f}={ema_ok} | "
                   f"RSI: {ind['rsi']:.2f}<{PARAMS['rsi_umbral']}={rsi_ok} | "
@@ -102,7 +124,9 @@ def ejecutar_estrategia():
 
     except Exception as e:
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Error: {e}", flush=True)
+        enviar_mensaje_telegram(f"❌ Error en bot:\n{str(e)}")
 
+# --- Loop principal del bot --- #
 def run_bot():
     while True:
         ejecutar_estrategia()
