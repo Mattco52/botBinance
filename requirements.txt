@@ -1,5 +1,5 @@
 python-binance
-requests
-pytz
 pandas
 ta
+flask
+python-dotenv
