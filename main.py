@@ -5,7 +5,7 @@ from datetime import datetime
 import pandas as pd
 from binance.client import Client
 from binance.enums import *
-from binance.streams import ThreadedWebsocketManager
+from binance import ThreadedWebsocketManager
 from dotenv import load_dotenv
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator
