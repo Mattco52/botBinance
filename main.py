@@ -24,8 +24,10 @@ PARAMS = {
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
-    'take_profit': 1.5,
-    'stop_loss': 0.75,
+    'rsi_buy_threshold': 30,   # RSI para comprar (sobreventa)
+    'rsi_sell_threshold': 70,  # RSI para vender (sobrecompra)
+    'take_profit': 1.5,  # porcentaje
+    'stop_loss': 0.75,   # porcentaje
     'quantity': 0.001,
     'sleep_time': 60
 }
@@ -56,47 +58,59 @@ def enviar_mensaje_telegram(mensaje):
     except Exception as e:
         print(f"❌ Error enviando mensaje Telegram: {e}", flush=True)
 
-# --- Lógica de trading con estrategia activa --- #
+# --- Indicadores técnicos --- #
+def calcular_indicadores():
+    klines = client.get_historical_klines(
+        symbol=PARAMS['symbol'],
+        interval=PARAMS['timeframe'],
+        start_str="24 hours ago UTC"
+    )
+    df = pd.DataFrame(klines, columns=[
+        'timestamp', 'open', 'high', 'low', 'close', 'volume',
+        'close_time', 'quote_asset_volume', 'number_of_trades',
+        'taker_buy_base', 'taker_buy_quote', 'ignore'
+    ])
+    df['close'] = pd.to_numeric(df['close'])
+    df['high'] = pd.to_numeric(df['high'])
+
+    df['ema9'] = EMAIndicator(df['close'], window=PARAMS['ema_short']).ema_indicator()
+    df['ema21'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
+    df['rsi'] = RSIIndicator(df['close'], window=PARAMS['rsi_window']).rsi()
+
+    return df.iloc[-1]
+
+# --- Estado global para controlar posiciones --- #
+posicion_abierta = False
+
+# --- Lógica de trading --- #
 def ejecutar_estrategia():
+    global posicion_abierta
+
     try:
         ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"[{ahora}] Ejecutando estrategia...", flush=True)
 
-        # Obtener los datos históricos recientes
-        klines = client.get_historical_klines(
-            symbol=PARAMS['symbol'],
-            interval=PARAMS['timeframe'],
-            start_str="3 hours ago UTC"
-        )
-        df = pd.DataFrame(klines, columns=[
-            'timestamp', 'open', 'high', 'low', 'close', 'volume',
-            'close_time', 'quote_asset_volume', 'number_of_trades',
-            'taker_buy_base', 'taker_buy_quote', 'ignore'
-        ])
-        df['close'] = pd.to_numeric(df['close'])
-        df['ema9'] = EMAIndicator(df['close'], window=PARAMS['ema_short']).ema_indicator()
-        df['ema21'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
-        df['rsi'] = RSIIndicator(df['close'], window=PARAMS['rsi_window']).rsi()
-
-        # Filtrar datos más recientes
-        prev = df.iloc[-2]
-        curr = df.iloc[-1]
         precio_actual = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
+        ind = calcular_indicadores()
 
-        # --- Señal de COMPRA --- #
-        cruz_ema_up = prev['ema9'] < prev['ema21'] and curr['ema9'] > curr['ema21']
-        rsi_up = prev['rsi'] < 50 and curr['rsi'] > 50
-        close_above_ema21 = curr['close'] > curr['ema21']
+        ema_ok = ind['ema9'] > ind['ema21']
+        rsi = ind['rsi']
 
-        if cruz_ema_up and rsi_up and close_above_ema21:
-            print(f"[{ahora}] 🟢 SEÑAL DE COMPRA", flush=True)
-            enviar_mensaje_telegram(f"🟢 COMPRA ejecutada\nPrecio: {precio_actual:.2f}\nRSI: {curr['rsi']:.2f}")
+        # Condición de compra
+        if not posicion_abierta and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
+            print(f"[{ahora}] 🟢 Señal de COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
+            enviar_mensaje_telegram(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
+
             order = client.create_order(
                 symbol=PARAMS['symbol'],
                 side=Client.SIDE_BUY,
                 type=Client.ORDER_TYPE_MARKET,
                 quantity=PARAMS['quantity']
             )
+            print(f"[{ahora}] ✅ Orden de COMPRA ejecutada ID: {order['orderId']}", flush=True)
+            enviar_mensaje_telegram(f"✅ Orden de COMPRA ejecutada")
+
+            # Configurar OCO para tomar ganancias y limitar pérdidas
             tp = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
             sl = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
 
@@ -104,27 +118,38 @@ def ejecutar_estrategia():
                 symbol=PARAMS['symbol'],
                 side=Client.SIDE_SELL,
                 quantity=PARAMS['quantity'],
-                stopPrice=sl,
-                stopLimitPrice=sl,
-                price=tp
+                price=str(tp),
+                stopPrice=str(sl),
+                stopLimitPrice=str(sl),
+                stopLimitTimeInForce='GTC'
             )
+            print(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl}", flush=True)
             enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
 
-        # --- Señal de VENTA (salida anticipada) --- #
-        cruz_ema_down = prev['ema9'] > prev['ema21'] and curr['ema9'] < curr['ema21']
-        rsi_down = prev['rsi'] > 55 and curr['rsi'] < 50
-        close_below_ema9 = curr['close'] < curr['ema9']
+            posicion_abierta = True
 
-        if cruz_ema_down and rsi_down and close_below_ema9:
-            print(f"[{ahora}] 🔻 SEÑAL DE VENTA", flush=True)
-            enviar_mensaje_telegram("🔻 VENTA anticipada señalada. Considera cerrar manualmente si tienes posición.")
+        # Condición de venta manual si RSI está alto (sobrecompra)
+        elif posicion_abierta and rsi > PARAMS['rsi_sell_threshold']:
+            print(f"[{ahora}] 🔴 Señal de VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
+            enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
-        # Si no hay señal
-        if not (cruz_ema_up and rsi_up and close_above_ema21) and not (cruz_ema_down and rsi_down and close_below_ema9):
-            print(f"[{ahora}] 🛌 Sin señal clara | RSI: {curr['rsi']:.2f}", flush=True)
+            order = client.create_order(
+                symbol=PARAMS['symbol'],
+                side=Client.SIDE_SELL,
+                type=Client.ORDER_TYPE_MARKET,
+                quantity=PARAMS['quantity']
+            )
+            print(f"[{ahora}] ✅ Orden de VENTA ejecutada ID: {order['orderId']}", flush=True)
+            enviar_mensaje_telegram(f"✅ Orden de VENTA ejecutada")
+
+            posicion_abierta = False
+
+        else:
+            print(f"[{ahora}] ⚪ Sin señal clara | EMA9: {ind['ema9']:.2f} > EMA21: {ind['ema21']:.2f}={ema_ok} | RSI: {rsi:.2f}", flush=True)
 
     except Exception as e:
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Error: {e}", flush=True)
+        error_msg = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Error: {e}"
+        print(error_msg, flush=True)
         enviar_mensaje_telegram(f"❌ Error en bot:\n{str(e)}")
 
 # --- Loop principal del bot --- #
