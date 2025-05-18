@@ -11,13 +11,12 @@ from ta.trend import EMAIndicator
 from flask import Flask, jsonify
 import requests
 
-# --- Cargar API keys y variables de entorno --- #
+# --- Cargar API keys --- #
 load_dotenv()
 api_key = os.getenv("API_KEY")
 secret_key = os.getenv("SECRET_KEY")
 client = Client(api_key, secret_key, testnet=True)
 
-# --- Parámetros del bot --- #
 PARAMS = {
     'symbol': 'BTCUSDT',
     'timeframe': KLINE_INTERVAL_5MINUTE,
@@ -32,7 +31,6 @@ PARAMS = {
     'sleep_time': 60
 }
 
-# --- Inicializar Flask --- #
 app = Flask(__name__)
 
 @app.route('/')
@@ -42,7 +40,6 @@ def status():
         'hora': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }), 200
 
-# --- Enviar mensajes a Telegram --- #
 def enviar_mensaje_telegram(mensaje):
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
@@ -53,7 +50,6 @@ def enviar_mensaje_telegram(mensaje):
     except Exception as e:
         print(f"❌ Error enviando mensaje Telegram: {e}", flush=True)
 
-# --- Calcular indicadores técnicos --- #
 def calcular_indicadores():
     klines = client.get_historical_klines(
         symbol=PARAMS['symbol'],
@@ -74,10 +70,8 @@ def calcular_indicadores():
 
     return df.iloc[-1]
 
-# --- Estados del bot --- #
 posicion_abierta = False
 
-# --- Función de compra con OCO --- #
 def comprar(precio_actual, rsi):
     global posicion_abierta
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -110,7 +104,6 @@ def comprar(precio_actual, rsi):
 
     posicion_abierta = True
 
-# --- Función de venta --- #
 def vender(precio_actual, rsi):
     global posicion_abierta
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -128,7 +121,6 @@ def vender(precio_actual, rsi):
 
     posicion_abierta = False
 
-# --- Lógica principal del bot --- #
 def ejecutar_estrategia():
     global posicion_abierta
     try:
@@ -153,16 +145,14 @@ def ejecutar_estrategia():
         print(error_msg, flush=True)
         enviar_mensaje_telegram(f"❌ Error en bot:\n{str(e)}")
 
-# --- Hilo de ejecución del bot --- #
 def run_bot():
-    print("🌀 Hilo del bot iniciado", flush=True)
     while True:
         ejecutar_estrategia()
         time.sleep(PARAMS['sleep_time'])
 
-# --- Ejecutar todo --- #
 if __name__ == '__main__':
-    print("🚀 Iniciando bot de Binance...", flush=True)
     threading.Thread(target=run_bot, daemon=True).start()
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
+
