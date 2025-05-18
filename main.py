@@ -25,6 +25,7 @@ PARAMS = {
     'rsi_window': 14,
     'rsi_buy_threshold': 30,
     'rsi_sell_threshold': 70,
+    'rsi_exit_threshold': 60,  # salida por pérdida de momentum
     'take_profit': 1.5,
     'stop_loss': 0.75,
     'quantity': 0.001,
@@ -70,13 +71,22 @@ def calcular_indicadores():
 
     return df.iloc[-1]
 
+def hay_orden_abierta():
+    """Verifica si hay una orden abierta del lado de compra."""
+    try:
+        open_orders = client.get_open_orders(symbol=PARAMS['symbol'])
+        return len(open_orders) > 0
+    except Exception as e:
+        print(f"⚠️ Error al verificar órdenes abiertas: {e}")
+        return False
+
 posicion_abierta = False
 
 def comprar(precio_actual, rsi):
     global posicion_abierta
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{ahora}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
-    enviar_mensaje_telegram(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
+    print(f"\n🟢 [{ahora}] EJECUTANDO COMPRA\nPrecio actual: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
+    enviar_mensaje_telegram(f"🟢 COMPRA ejecutada\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
     order = client.create_order(
         symbol=PARAMS['symbol'],
@@ -84,8 +94,6 @@ def comprar(precio_actual, rsi):
         type=Client.ORDER_TYPE_MARKET,
         quantity=PARAMS['quantity']
     )
-    print(f"[{ahora}] ✅ Orden COMPRA ejecutada ID: {order['orderId']}", flush=True)
-    enviar_mensaje_telegram(f"✅ Orden de COMPRA ejecutada")
 
     tp = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
     sl = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
@@ -99,16 +107,16 @@ def comprar(precio_actual, rsi):
         stopLimitPrice=str(sl),
         stopLimitTimeInForce='GTC'
     )
-    print(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl}", flush=True)
-    enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
+    print(f"✅ Orden ejecutada | TP: {tp} | SL: {sl}")
+    enviar_mensaje_telegram(f"✅ OCO colocado\nTP: {tp} | SL: {sl}")
 
     posicion_abierta = True
 
-def vender(precio_actual, rsi):
+def vender(precio_actual, rsi, motivo=""):
     global posicion_abierta
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
-    enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
+    print(f"\n🔴 [{ahora}] EJECUTANDO VENTA\nMotivo: {motivo}\nPrecio actual: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
+    enviar_mensaje_telegram(f"🔴 VENTA ejecutada\n{motivo}\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
     order = client.create_order(
         symbol=PARAMS['symbol'],
@@ -116,41 +124,47 @@ def vender(precio_actual, rsi):
         type=Client.ORDER_TYPE_MARKET,
         quantity=PARAMS['quantity']
     )
-    print(f"[{ahora}] ✅ Orden VENTA ejecutada ID: {order['orderId']}", flush=True)
-    enviar_mensaje_telegram(f"✅ Orden de VENTA ejecutada")
-
+    print("✅ Venta completada.")
     posicion_abierta = False
 
 def ejecutar_estrategia():
     global posicion_abierta
-    try:
-        ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"[{ahora}] Ejecutando estrategia...", flush=True)
+    ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"\n==============================")
+    print(f"⏰ [{ahora}] Ejecutando estrategia...")
+    print(f"==============================")
 
+    try:
         precio_actual = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
         ind = calcular_indicadores()
 
-        ema_ok = ind['ema9'] > ind['ema21']
+        ema9 = ind['ema9']
+        ema21 = ind['ema21']
         rsi = ind['rsi']
+        ema_ok = ema9 > ema21
 
-        if not posicion_abierta and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
-            comprar(precio_actual, rsi)
-        elif posicion_abierta:
-            if rsi > PARAMS['rsi_sell_threshold']:
-                vender(precio_actual, rsi)
-            elif rsi < 60 or not ema_ok:
-                print(f"[{ahora}] ⚠️ Condición de salida: RSI bajó de 60 o EMA9 < EMA21 | RSI: {rsi:.2f} | EMA OK: {ema_ok}", flush=True)
-                enviar_mensaje_telegram(f"⚠️ Cierre anticipado por condiciones técnicas\nRSI: {rsi:.2f} | EMA9 > EMA21: {ema_ok}")
-                vender(precio_actual, rsi)
+        print(f"📊 Indicadores: EMA9 = {ema9:.2f} | EMA21 = {ema21:.2f} | RSI = {rsi:.2f}")
+
+        if not posicion_abierta:
+            if ema_ok and rsi < PARAMS['rsi_buy_threshold']:
+                comprar(precio_actual, rsi)
             else:
-                print(f"[{ahora}] 🟡 Posición abierta | RSI: {rsi:.2f} | EMA OK: {ema_ok}", flush=True)
+                print(f"⚪ No se cumplen condiciones de compra.")
         else:
-            print(f"[{ahora}] ⚪ Sin señal clara | RSI: {rsi:.2f} | EMA OK: {ema_ok}", flush=True)
+            if not hay_orden_abierta():
+                print("🟡 No hay órdenes abiertas. Posición asumida como cerrada.")
+                posicion_abierta = False
+            elif rsi > PARAMS['rsi_sell_threshold']:
+                vender(precio_actual, rsi, motivo="RSI > 70 (Sobrecompra)")
+            elif rsi < PARAMS['rsi_exit_threshold'] or not ema_ok:
+                vender(precio_actual, rsi, motivo="RSI < 60 o EMA9 < EMA21 (salida técnica)")
+            else:
+                print(f"🟡 Posición abierta, pero sin señal de salida.")
 
     except Exception as e:
-        error_msg = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Error: {e}"
+        error_msg = f"❌ ERROR en estrategia: {e}"
         print(error_msg, flush=True)
-        enviar_mensaje_telegram(f"❌ Error en bot:\n{str(e)}")
+        enviar_mensaje_telegram(error_msg)
 
 def run_bot():
     while True:
