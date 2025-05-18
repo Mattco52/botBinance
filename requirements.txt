@@ -1,5 +1,6 @@
-python-binance
+python-binance>=1.0.15
 pandas
 ta
 flask
 python-dotenv
+requests
