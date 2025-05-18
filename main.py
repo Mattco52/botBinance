@@ -135,10 +135,17 @@ def ejecutar_estrategia():
 
         if not posicion_abierta and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
             comprar(precio_actual, rsi)
-        elif posicion_abierta and rsi > PARAMS['rsi_sell_threshold']:
-            vender(precio_actual, rsi)
+        elif posicion_abierta:
+            if rsi > PARAMS['rsi_sell_threshold']:
+                vender(precio_actual, rsi)
+            elif rsi < 60 or not ema_ok:
+                print(f"[{ahora}] ⚠️ Condición de salida: RSI bajó de 60 o EMA9 < EMA21 | RSI: {rsi:.2f} | EMA OK: {ema_ok}", flush=True)
+                enviar_mensaje_telegram(f"⚠️ Cierre anticipado por condiciones técnicas\nRSI: {rsi:.2f} | EMA9 > EMA21: {ema_ok}")
+                vender(precio_actual, rsi)
+            else:
+                print(f"[{ahora}] 🟡 Posición abierta | RSI: {rsi:.2f} | EMA OK: {ema_ok}", flush=True)
         else:
-            print(f"[{ahora}] ⚪ Sin señal clara | EMA9: {ind['ema9']:.2f} > EMA21: {ind['ema21']:.2f}={ema_ok} | RSI: {rsi:.2f}", flush=True)
+            print(f"[{ahora}] ⚪ Sin señal clara | RSI: {rsi:.2f} | EMA OK: {ema_ok}", flush=True)
 
     except Exception as e:
         error_msg = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Error: {e}"
