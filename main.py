@@ -5,6 +5,7 @@ from datetime import datetime
 import pandas as pd
 from binance.client import Client
 from binance.enums import *
+from binance.streams import ThreadedWebsocketManager
 from dotenv import load_dotenv
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator
@@ -39,7 +40,8 @@ app = Flask(__name__)
 def status():
     return jsonify({
         'status': 'Bot activo',
-        'hora': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        'hora': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'posicion_abierta': posicion_abierta
     }), 200
 
 # --- Función para enviar mensajes a Telegram --- #
@@ -63,7 +65,7 @@ def calcular_indicadores():
     klines = client.get_historical_klines(
         symbol=PARAMS['symbol'],
         interval=PARAMS['timeframe'],
-        start_str="24 hours ago UTC"
+        start_str="48 hours ago UTC"  # Más historial para mejor cálculo
     )
     df = pd.DataFrame(klines, columns=[
         'timestamp', 'open', 'high', 'low', 'close', 'volume',
@@ -81,6 +83,44 @@ def calcular_indicadores():
 
 # --- Estado global para controlar posiciones --- #
 posicion_abierta = False
+lock_posicion = threading.Lock()  # Para manejar acceso seguro a la variable global
+
+# --- Manejo de eventos de órdenes vía WebSocket --- #
+def handle_order_event(msg):
+    global posicion_abierta
+    # msg contiene datos del evento de orden
+    if 'e' in msg and msg['e'] == 'ORDER_TRADE_UPDATE':
+        o = msg['o']
+        symbol = o['s']
+        status = o['X']  # Status de la orden
+        side = o['S']    # 'BUY' o 'SELL'
+        order_type = o['o']
+        order_id = o['i']
+        # print para debugging:
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Evento orden: symbol={symbol} side={side} status={status} type={order_type} orderId={order_id}", flush=True)
+
+        # Solo nos importa el símbolo que estamos operando
+        if symbol != PARAMS['symbol']:
+            return
+        
+        # Detectar cierre de posición (orden OCO ejecutada o venta de mercado)
+        # Status 'FILLED' significa ejecutada
+        if status == 'FILLED':
+            if side == 'SELL':
+                # Cuando se vende (take profit o stop loss o venta manual), cerramos la posición
+                with lock_posicion:
+                    if posicion_abierta:
+                        posicion_abierta = False
+                        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⚠️ Posición cerrada por orden SELL ejecutada", flush=True)
+                        enviar_mensaje_telegram("⚠️ Posición cerrada (TP, SL o venta manual). Bot listo para nueva operación.")
+
+            elif side == 'BUY':
+                # Confirmar que posición está abierta tras compra
+                with lock_posicion:
+                    if not posicion_abierta:
+                        posicion_abierta = True
+                        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⚠️ Posición abierta por orden BUY ejecutada", flush=True)
+                        enviar_mensaje_telegram("⚠️ Posición abierta (compra ejecutada).")
 
 # --- Lógica de trading --- #
 def ejecutar_estrategia():
@@ -96,8 +136,11 @@ def ejecutar_estrategia():
         ema_ok = ind['ema9'] > ind['ema21']
         rsi = ind['rsi']
 
+        with lock_posicion:
+            posicion = posicion_abierta
+
         # Condición de compra
-        if not posicion_abierta and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
+        if not posicion and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
             print(f"[{ahora}] 🟢 Señal de COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
             enviar_mensaje_telegram(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
@@ -126,10 +169,11 @@ def ejecutar_estrategia():
             print(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl}", flush=True)
             enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
 
-            posicion_abierta = True
+            with lock_posicion:
+                posicion_abierta = True
 
         # Condición de venta manual si RSI está alto (sobrecompra)
-        elif posicion_abierta and rsi > PARAMS['rsi_sell_threshold']:
+        elif posicion and rsi > PARAMS['rsi_sell_threshold']:
             print(f"[{ahora}] 🔴 Señal de VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
             enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
@@ -142,7 +186,8 @@ def ejecutar_estrategia():
             print(f"[{ahora}] ✅ Orden de VENTA ejecutada ID: {order['orderId']}", flush=True)
             enviar_mensaje_telegram(f"✅ Orden de VENTA ejecutada")
 
-            posicion_abierta = False
+            with lock_posicion:
+                posicion_abierta = False
 
         else:
             print(f"[{ahora}] ⚪ Sin señal clara | EMA9: {ind['ema9']:.2f} > EMA21: {ind['ema21']:.2f}={ema_ok} | RSI: {rsi:.2f}", flush=True)
@@ -158,8 +203,18 @@ def run_bot():
         ejecutar_estrategia()
         time.sleep(PARAMS['sleep_time'])
 
-# --- Lanzar Flask + Bot --- #
+# --- Inicializar WebSocket para user data stream --- #
+def start_user_stream():
+    twm = ThreadedWebsocketManager(api_key=api_key, api_secret=secret_key, testnet=True)
+    twm.start()
+    listen_key = client.stream_get_listen_key()
+    twm.start_user_socket(callback=handle_order_event, listen_key=listen_key)
+    return twm
+
+# --- Lanzar Flask + Bot + WebSocket --- #
 if __name__ == '__main__':
+    twm = start_user_stream()  # Iniciar WebSocket para escuchar eventos orden
+
     # Iniciar el bot en segundo plano
     threading.Thread(target=run_bot, daemon=True).start()
 
