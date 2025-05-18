@@ -17,22 +17,20 @@ api_key = os.getenv("API_KEY")
 secret_key = os.getenv("SECRET_KEY")
 client = Client(api_key, secret_key, testnet=True)
 
-# --- Parámetros del bot --- #
 PARAMS = {
     'symbol': 'BTCUSDT',
     'timeframe': KLINE_INTERVAL_5MINUTE,
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
-    'rsi_buy_threshold': 30,   # RSI para comprar (sobreventa)
-    'rsi_sell_threshold': 70,  # RSI para vender (sobrecompra)
-    'take_profit': 1.5,  # porcentaje
-    'stop_loss': 0.75,   # porcentaje
+    'rsi_buy_threshold': 30,
+    'rsi_sell_threshold': 70,
+    'take_profit': 1.5,
+    'stop_loss': 0.75,
     'quantity': 0.001,
     'sleep_time': 60
 }
 
-# --- Flask app --- #
 app = Flask(__name__)
 
 @app.route('/')
@@ -42,23 +40,16 @@ def status():
         'hora': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }), 200
 
-# --- Función para enviar mensajes a Telegram --- #
 def enviar_mensaje_telegram(mensaje):
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-
-    payload = {
-        "chat_id": chat_id,
-        "text": mensaje
-    }
-
+    payload = {"chat_id": chat_id, "text": mensaje}
     try:
-        requests.post(url, data=payload)
+        requests.post(url, data=payload, timeout=5)
     except Exception as e:
         print(f"❌ Error enviando mensaje Telegram: {e}", flush=True)
 
-# --- Indicadores técnicos --- #
 def calcular_indicadores():
     klines = client.get_historical_klines(
         symbol=PARAMS['symbol'],
@@ -79,13 +70,59 @@ def calcular_indicadores():
 
     return df.iloc[-1]
 
-# --- Estado global para controlar posiciones --- #
 posicion_abierta = False
 
-# --- Lógica de trading --- #
+def comprar(precio_actual, rsi):
+    global posicion_abierta
+    ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"[{ahora}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
+    enviar_mensaje_telegram(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
+
+    order = client.create_order(
+        symbol=PARAMS['symbol'],
+        side=Client.SIDE_BUY,
+        type=Client.ORDER_TYPE_MARKET,
+        quantity=PARAMS['quantity']
+    )
+    print(f"[{ahora}] ✅ Orden COMPRA ejecutada ID: {order['orderId']}", flush=True)
+    enviar_mensaje_telegram(f"✅ Orden de COMPRA ejecutada")
+
+    tp = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
+    sl = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
+
+    client.create_oco_order(
+        symbol=PARAMS['symbol'],
+        side=Client.SIDE_SELL,
+        quantity=PARAMS['quantity'],
+        price=str(tp),
+        stopPrice=str(sl),
+        stopLimitPrice=str(sl),
+        stopLimitTimeInForce='GTC'
+    )
+    print(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl}", flush=True)
+    enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
+
+    posicion_abierta = True
+
+def vender(precio_actual, rsi):
+    global posicion_abierta
+    ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
+    enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
+
+    order = client.create_order(
+        symbol=PARAMS['symbol'],
+        side=Client.SIDE_SELL,
+        type=Client.ORDER_TYPE_MARKET,
+        quantity=PARAMS['quantity']
+    )
+    print(f"[{ahora}] ✅ Orden VENTA ejecutada ID: {order['orderId']}", flush=True)
+    enviar_mensaje_telegram(f"✅ Orden de VENTA ejecutada")
+
+    posicion_abierta = False
+
 def ejecutar_estrategia():
     global posicion_abierta
-
     try:
         ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"[{ahora}] Ejecutando estrategia...", flush=True)
@@ -96,54 +133,10 @@ def ejecutar_estrategia():
         ema_ok = ind['ema9'] > ind['ema21']
         rsi = ind['rsi']
 
-        # Condición de compra
         if not posicion_abierta and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
-            print(f"[{ahora}] 🟢 Señal de COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
-            enviar_mensaje_telegram(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
-
-            order = client.create_order(
-                symbol=PARAMS['symbol'],
-                side=Client.SIDE_BUY,
-                type=Client.ORDER_TYPE_MARKET,
-                quantity=PARAMS['quantity']
-            )
-            print(f"[{ahora}] ✅ Orden de COMPRA ejecutada ID: {order['orderId']}", flush=True)
-            enviar_mensaje_telegram(f"✅ Orden de COMPRA ejecutada")
-
-            # Configurar OCO para tomar ganancias y limitar pérdidas
-            tp = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
-            sl = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
-
-            client.create_oco_order(
-                symbol=PARAMS['symbol'],
-                side=Client.SIDE_SELL,
-                quantity=PARAMS['quantity'],
-                price=str(tp),
-                stopPrice=str(sl),
-                stopLimitPrice=str(sl),
-                stopLimitTimeInForce='GTC'
-            )
-            print(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl}", flush=True)
-            enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
-
-            posicion_abierta = True
-
-        # Condición de venta manual si RSI está alto (sobrecompra)
+            comprar(precio_actual, rsi)
         elif posicion_abierta and rsi > PARAMS['rsi_sell_threshold']:
-            print(f"[{ahora}] 🔴 Señal de VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
-            enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
-
-            order = client.create_order(
-                symbol=PARAMS['symbol'],
-                side=Client.SIDE_SELL,
-                type=Client.ORDER_TYPE_MARKET,
-                quantity=PARAMS['quantity']
-            )
-            print(f"[{ahora}] ✅ Orden de VENTA ejecutada ID: {order['orderId']}", flush=True)
-            enviar_mensaje_telegram(f"✅ Orden de VENTA ejecutada")
-
-            posicion_abierta = False
-
+            vender(precio_actual, rsi)
         else:
             print(f"[{ahora}] ⚪ Sin señal clara | EMA9: {ind['ema9']:.2f} > EMA21: {ind['ema21']:.2f}={ema_ok} | RSI: {rsi:.2f}", flush=True)
 
@@ -152,17 +145,12 @@ def ejecutar_estrategia():
         print(error_msg, flush=True)
         enviar_mensaje_telegram(f"❌ Error en bot:\n{str(e)}")
 
-# --- Loop principal del bot --- #
 def run_bot():
     while True:
         ejecutar_estrategia()
         time.sleep(PARAMS['sleep_time'])
 
-# --- Lanzar Flask + Bot --- #
 if __name__ == '__main__':
-    # Iniciar el bot en segundo plano
     threading.Thread(target=run_bot, daemon=True).start()
-
-    # Ejecutar servidor Flask
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
