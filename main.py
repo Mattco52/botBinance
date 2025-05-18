@@ -207,17 +207,33 @@ def run_bot():
 def start_user_stream():
     twm = ThreadedWebsocketManager(api_key=api_key, api_secret=secret_key, testnet=True)
     twm.start()
+
+    # Obtener listen_key para el user data stream
     listen_key = client.stream_get_listen_key()
-    twm.start_user_socket(callback=handle_order_event, listen_key=listen_key)
+
+    # Iniciar el user socket sin pasar listen_key (no se acepta ese parámetro)
+    twm.start_user_socket(callback=handle_order_event)
+
+    # Función para renovar el listen_key cada 30 minutos y mantener vivo el stream
+    def keep_alive():
+        while True:
+            try:
+                client.stream_keepalive(listen_key=listen_key)
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Listen key renovado correctamente.", flush=True)
+            except Exception as e:
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error renovando listen key: {e}", flush=True)
+            time.sleep(30 * 60)  # renovar cada 30 minutos
+
+    threading.Thread(target=keep_alive, daemon=True).start()
+
     return twm
 
-# --- Lanzar Flask + Bot + WebSocket --- #
-if __name__ == '__main__':
-    twm = start_user_stream()  # Iniciar WebSocket para escuchar eventos orden
+if __name__ == "__main__":
+    # Iniciar WebSocket de usuario (para órdenes)
+    twm = start_user_stream()
 
-    # Iniciar el bot en segundo plano
-    threading.Thread(target=run_bot, daemon=True).start()
+    # Iniciar Flask en otro hilo para el endpoint
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True).start()
 
-    # Ejecutar servidor Flask
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    # Iniciar loop principal del bot
+    run_bot()
