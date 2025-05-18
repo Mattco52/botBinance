@@ -21,4 +21,4 @@ def enviar_mensaje_telegram(mensaje):
         print(f"❌ Error enviando mensaje Telegram: {e}")
 
 # --- PRUEBA --- #
-enviar_mensaje_telegram("🚀 Prueba de Telegram desde el bot de Binance")
+enviar_mensaje_telegram("🚀 Hola Matt")
