@@ -25,7 +25,7 @@ PARAMS = {
     'rsi_window': 14,
     'rsi_buy_threshold': 30,
     'rsi_sell_threshold': 70,
-    'rsi_exit_threshold': 60,  # salida por pérdida de momentum
+    'rsi_exit_threshold': 60,
     'take_profit': 1.5,
     'stop_loss': 0.75,
     'quantity': 0.001,
@@ -72,7 +72,6 @@ def calcular_indicadores():
     return df.iloc[-1]
 
 def hay_orden_abierta():
-    """Verifica si hay una orden abierta del lado de compra."""
     try:
         open_orders = client.get_open_orders(symbol=PARAMS['symbol'])
         return len(open_orders) > 0
@@ -88,7 +87,7 @@ def comprar(precio_actual, rsi):
     print(f"\n🟢 [{ahora}] EJECUTANDO COMPRA\nPrecio actual: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
     enviar_mensaje_telegram(f"🟢 COMPRA ejecutada\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
-    order = client.create_order(
+    client.create_order(
         symbol=PARAMS['symbol'],
         side=Client.SIDE_BUY,
         type=Client.ORDER_TYPE_MARKET,
@@ -118,7 +117,7 @@ def vender(precio_actual, rsi, motivo=""):
     print(f"\n🔴 [{ahora}] EJECUTANDO VENTA\nMotivo: {motivo}\nPrecio actual: {precio_actual:.2f} | RSI: {rsi:.2f}", flush=True)
     enviar_mensaje_telegram(f"🔴 VENTA ejecutada\n{motivo}\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
-    order = client.create_order(
+    client.create_order(
         symbol=PARAMS['symbol'],
         side=Client.SIDE_SELL,
         type=Client.ORDER_TYPE_MARKET,
@@ -149,7 +148,7 @@ def ejecutar_estrategia():
             if ema_ok and rsi < PARAMS['rsi_buy_threshold']:
                 comprar(precio_actual, rsi)
             else:
-                print(f"⚪ No se cumplen condiciones de compra.")
+                print(f"🔁 Esperando compra | EMA OK: {ema_ok} | RSI: {rsi:.2f} > {PARAMS['rsi_buy_threshold']}")
         else:
             if not hay_orden_abierta():
                 print("🟡 No hay órdenes abiertas. Posición asumida como cerrada.")
@@ -159,7 +158,7 @@ def ejecutar_estrategia():
             elif rsi < PARAMS['rsi_exit_threshold'] or not ema_ok:
                 vender(precio_actual, rsi, motivo="RSI < 60 o EMA9 < EMA21 (salida técnica)")
             else:
-                print(f"🟡 Posición abierta, pero sin señal de salida.")
+                print(f"🔁 Esperando venta | EMA OK: {ema_ok} | RSI: {rsi:.2f} < {PARAMS['rsi_sell_threshold']}")
 
     except Exception as e:
         error_msg = f"❌ ERROR en estrategia: {e}"
