@@ -99,12 +99,14 @@ def calcular_indicadores():
 
     return df.iloc[-2], df.iloc[-1]  # fila anterior, fila actual
 
+# --- Estado de trading --- #
 posicion_abierta = False
 order_id = None
+oco_order_ids = []  # guardaremos los IDs de las órdenes OCO
 rsi_anterior = None
 
 def comprar(precio_actual, rsi):
-    global posicion_abierta, order_id
+    global posicion_abierta, order_id, oco_order_ids
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje_telegram(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
@@ -134,7 +136,8 @@ def comprar(precio_actual, rsi):
                     stopLimitPrice=str(sl),
                     stopLimitTimeInForce='GTC'
                 )
-                logging.info(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl} | OCO ID: {oco_order['orderId']}")
+                oco_order_ids = [o['orderId'] for o in oco_order['orderReports']]
+                logging.info(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl} | IDs: {oco_order_ids}")
                 enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
             except Exception as e:
                 logging.error(f"Error al crear orden OCO: {e}")
@@ -145,7 +148,7 @@ def comprar(precio_actual, rsi):
         enviar_mensaje_telegram(f"❌ Error al COMPRAR:\n{str(e)}")
 
 def vender(precio_actual, rsi, razon="Señal de salida"):
-    global posicion_abierta, order_id
+    global posicion_abierta, order_id, oco_order_ids
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f} | Motivo: {razon}")
     enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
@@ -161,15 +164,39 @@ def vender(precio_actual, rsi, razon="Señal de salida"):
         enviar_mensaje_telegram("✅ Orden de VENTA ejecutada")
         posicion_abierta = False
         order_id = None
+        oco_order_ids = []
     except Exception as e:
         logging.error(f"Error al ejecutar orden de venta: {e}")
         enviar_mensaje_telegram(f"❌ Error al VENDER:\n{str(e)}")
+
+def verificar_cierre_oco():
+    global posicion_abierta, oco_order_ids
+    if not posicion_abierta or not oco_order_ids:
+        return
+
+    cerradas = 0
+    for oid in oco_order_ids:
+        try:
+            order = client.get_order(symbol=PARAMS['symbol'], orderId=oid)
+            if order['status'] in ['FILLED', 'CANCELED', 'REJECTED', 'EXPIRED']:
+                cerradas += 1
+        except Exception as e:
+            logging.warning(f"No se pudo verificar el estado de la orden OCO ID {oid}: {e}")
+
+    if cerradas == len(oco_order_ids):
+        posicion_abierta = False
+        oco_order_ids = []
+        ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        logging.info(f"[{ahora}] 📉 Orden OCO ejecutada, cerrando posición.")
+        enviar_mensaje_telegram("📉 Una de las órdenes OCO fue ejecutada. Posición cerrada.")
 
 def ejecutar_estrategia():
     global posicion_abierta, rsi_anterior
     try:
         ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         logging.info(f"[{ahora}] Ejecutando estrategia...")
+
+        verificar_cierre_oco()
 
         precio_actual = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
         fila_ant, fila_act = calcular_indicadores()
