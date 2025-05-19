@@ -25,14 +25,14 @@ client = Client(api_key, secret_key, testnet=testnet)
 # --- Parámetros del Bot --- #
 PARAMS = {
     'symbol': 'BTCUSDT',
-    'timeframe': KLINE_INTERVAL_15MINUTE,  # Podrías probar con 15 o 30 minutos
+    'timeframe': KLINE_INTERVAL_15MINUTE,
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
-    'rsi_buy_threshold': 40,  # Aumentar para comprar antes
-    'rsi_sell_threshold': 60, # Disminuir para vender antes
-    'take_profit': 1.0,      # Reducir el TP para operaciones más frecuentes
-    'stop_loss': 0.5,        # Reducir el SL para operaciones más frecuentes
+    'rsi_buy_threshold': 40,
+    'rsi_sell_threshold': 60,
+    'take_profit': 1.0,
+    'stop_loss': 0.5,
     'quantity': 0.001,
     'sleep_time': 60,
     'use_oco': True,
@@ -48,10 +48,6 @@ def status():
     }), 200
 
 def enviar_mensaje_telegram(mensaje):
-    """
-    Función para enviar mensajes a través de Telegram.
-    Utiliza reintentos con retroceso exponencial para manejar errores de conexión.
-    """
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
     if not token or not chat_id:
@@ -74,16 +70,10 @@ def enviar_mensaje_telegram(mensaje):
                 time.sleep(delay)
                 delay *= 2
             else:
-                logging.error("Maximo de reintentos alcanzado. No se pudo enviar el mensaje de Telegram.")
+                logging.error("Máximo de reintentos alcanzado. No se pudo enviar el mensaje.")
                 return
 
 def calcular_indicadores():
-    """
-    Calcula los indicadores técnicos EMA y RSI.
-
-    Retorna:
-        pandas.Series: La última fila del DataFrame con los indicadores calculados.
-    """
     try:
         klines = client.get_historical_klines(
             symbol=PARAMS['symbol'],
@@ -107,15 +97,13 @@ def calcular_indicadores():
     df['ema21'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
     df['rsi'] = RSIIndicator(df['close'], window=PARAMS['rsi_window']).rsi()
 
-    return df.iloc[-1]
+    return df.iloc[-2], df.iloc[-1]  # fila anterior, fila actual
 
 posicion_abierta = False
 order_id = None
+rsi_anterior = None
 
 def comprar(precio_actual, rsi):
-    """
-    Ejecuta una orden de compra y, si está habilitado, configura una orden OCO para Take Profit y Stop Loss.
-    """
     global posicion_abierta, order_id
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
@@ -130,7 +118,7 @@ def comprar(precio_actual, rsi):
         )
         order_id = order['orderId']
         logging.info(f"[{ahora}] ✅ Orden COMPRA ejecutada ID: {order_id}")
-        enviar_mensaje_telegram(f"✅ Orden de COMPRA ejecutada")
+        enviar_mensaje_telegram("✅ Orden de COMPRA ejecutada")
         posicion_abierta = True
 
         if PARAMS['use_oco']:
@@ -156,14 +144,11 @@ def comprar(precio_actual, rsi):
         logging.error(f"Error al ejecutar orden de compra: {e}")
         enviar_mensaje_telegram(f"❌ Error al COMPRAR:\n{str(e)}")
 
-def vender(precio_actual, rsi):
-    """
-    Ejecuta una orden de venta y resetea el estado de la posición.
-    """
+def vender(precio_actual, rsi, razon="Señal de salida"):
     global posicion_abierta, order_id
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
-    enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
+    logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f} | Motivo: {razon}")
+    enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
 
     try:
         order = client.create_order(
@@ -173,7 +158,7 @@ def vender(precio_actual, rsi):
             quantity=PARAMS['quantity']
         )
         logging.info(f"[{ahora}] ✅ Orden VENTA ejecutada ID: {order['orderId']}")
-        enviar_mensaje_telegram(f"✅ Orden de VENTA ejecutada")
+        enviar_mensaje_telegram("✅ Orden de VENTA ejecutada")
         posicion_abierta = False
         order_id = None
     except Exception as e:
@@ -181,39 +166,40 @@ def vender(precio_actual, rsi):
         enviar_mensaje_telegram(f"❌ Error al VENDER:\n{str(e)}")
 
 def ejecutar_estrategia():
-    """
-    Ejecuta la lógica de la estrategia de trading.
-    """
-    global posicion_abierta
+    global posicion_abierta, rsi_anterior
     try:
         ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         logging.info(f"[{ahora}] Ejecutando estrategia...")
 
         precio_actual = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
-        ind = calcular_indicadores()
-        if ind is None:
-            logging.error(f"[{ahora}] No se pudieron obtener los indicadores. Saliendo de la ejecución de la estrategia.")
+        fila_ant, fila_act = calcular_indicadores()
+        if fila_act is None:
+            logging.error(f"[{ahora}] No se pudieron obtener los indicadores. Saliendo.")
             return
 
-        ema_ok = ind['ema9'] > ind['ema21']
-        rsi = ind['rsi']
+        ema_ok = fila_act['ema9'] > fila_act['ema21']
+        rsi = fila_act['rsi']
+        rsi_prev = fila_ant['rsi']
 
         if not posicion_abierta and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
             comprar(precio_actual, rsi)
-        elif posicion_abierta and rsi > PARAMS['rsi_sell_threshold']:
-            vender(precio_actual, rsi)
+
+        elif posicion_abierta:
+            if rsi > PARAMS['rsi_sell_threshold']:
+                vender(precio_actual, rsi, "RSI sobre umbral de venta")
+            elif rsi < 60 and rsi_prev > 60:
+                vender(precio_actual, rsi, "RSI perdió momentum")
+
         else:
-            logging.info(f"[{ahora}] ⚪ Sin señal clara | EMA9: {ind['ema9']:.2f} > EMA21: {ind['ema21']:.2f} = {ema_ok} | RSI: {rsi:.2f}")
+            logging.info(f"[{ahora}] ⚪ Sin señal clara | EMA9 > EMA21: {ema_ok} | RSI: {rsi:.2f}")
+
+        rsi_anterior = rsi
 
     except Exception as e:
-        error_msg = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Error: {e}"
-        logging.error(error_msg)
+        logging.error(f"❌ Error en ejecución: {e}")
         enviar_mensaje_telegram(f"❌ Error en bot:\n{str(e)}")
 
 def run_bot():
-    """
-    Función principal que ejecuta el bot en un bucle continuo.
-    """
     while True:
         ejecutar_estrategia()
         time.sleep(PARAMS['sleep_time'])
