@@ -25,7 +25,7 @@ client = Client(api_key, secret_key, testnet=testnet)
 # --- Parámetros del Bot --- #
 PARAMS = {
     'symbol': 'BTCUSDT',
-    'timeframe': KLINE_INTERVAL_15MINUTE,
+    'timeframe': KLINE_INTERVAL_5MINUTE,
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
@@ -34,7 +34,7 @@ PARAMS = {
     'take_profit': 1.0,
     'stop_loss': 0.5,
     'quantity': 0.001,
-    'sleep_time': 60,
+    'sleep_time': 30,
     'use_oco': True,
 }
 
