@@ -1,34 +1,77 @@
 import os
 from binance.client import Client
 from dotenv import load_dotenv
-import pandas as pd
 
-# Cargar las API Keys desde .env
+# Cargar claves API desde .env
 load_dotenv()
 api_key = os.getenv("API_KEY")
 secret_key = os.getenv("SECRET_KEY")
 testnet = os.getenv("TESTNET", "True").lower() == "true"
 
+# Conexión con Binance
 client = Client(api_key, secret_key, testnet=testnet)
 
-# Cambiar por el símbolo que te interese
-symbol = 'BTCUSDT'
+# === Configura tus parámetros aquí === #
+symbol = "BTCUSDT"
+base_asset = "BTC"
+quote_asset = "USDT"
 
-# Obtener historial de órdenes
-ordenes = client.get_all_orders(symbol=symbol)
+# Obtener balances
+def obtener_saldo(asset):
+    cuenta = client.get_account()
+    for balance in cuenta['balances']:
+        if balance['asset'] == asset:
+            return float(balance['free']) + float(balance['locked'])
+    return 0.0
 
-# Filtrar solo órdenes ejecutadas (FILLED)
-ordenes_ejecutadas = [orden for orden in ordenes if orden['status'] == 'FILLED']
+# Obtener precio actual del par
+def obtener_precio_actual():
+    ticker = client.get_symbol_ticker(symbol=symbol)
+    return float(ticker['price'])
 
-# Convertir a DataFrame para visualizar mejor
-df = pd.DataFrame(ordenes_ejecutadas)
+# Guardar saldos iniciales en un archivo la primera vez
+archivo_saldos = "saldos_iniciales.txt"
 
-# Seleccionar columnas clave
-columnas_interes = ['orderId', 'side', 'type', 'status', 'price', 'origQty', 'executedQty', 'time']
-df = df[columnas_interes]
+def guardar_saldo_inicial(btc, usdt):
+    with open(archivo_saldos, 'w') as f:
+        f.write(f"{btc},{usdt}")
 
-# Convertir el tiempo a formato legible
-df['time'] = pd.to_datetime(df['time'], unit='ms')
+def cargar_saldo_inicial():
+    if not os.path.exists(archivo_saldos):
+        return None, None
+    with open(archivo_saldos, 'r') as f:
+        contenido = f.read()
+        btc, usdt = contenido.strip().split(",")
+        return float(btc), float(usdt)
 
-# Mostrar
-print(df)
+# === PROCESO === #
+btc_actual = obtener_saldo(base_asset)
+usdt_actual = obtener_saldo(quote_asset)
+precio_actual = obtener_precio_actual()
+
+btc_ini, usdt_ini = cargar_saldo_inicial()
+
+if btc_ini is None or usdt_ini is None:
+    print("Primera ejecución: guardando saldos iniciales...")
+    guardar_saldo_inicial(btc_actual, usdt_actual)
+    print(f"Saldos guardados:\nBTC: {btc_actual:.6f}\nUSDT: {usdt_actual:.2f}")
+else:
+    print("=== SALDO INICIAL ===")
+    print(f"BTC: {btc_ini:.6f}")
+    print(f"USDT: {usdt_ini:.2f}")
+
+    print("\n=== SALDO ACTUAL ===")
+    print(f"BTC: {btc_actual:.6f}")
+    print(f"USDT: {usdt_actual:.2f}")
+
+    # Valor inicial y actual en USDT
+    valor_inicial = btc_ini * precio_actual + usdt_ini
+    valor_actual = btc_actual * precio_actual + usdt_actual
+    ganancia = valor_actual - valor_inicial
+    porcentaje = (ganancia / valor_inicial) * 100
+
+    print("\n=== RESULTADO ESTIMADO ===")
+    print(f"Precio BTC actual: {precio_actual:.2f} USDT")
+    print(f"Valor inicial: {valor_inicial:.2f} USDT")
+    print(f"Valor actual: {valor_actual:.2f} USDT")
+    print(f"Ganancia/Pérdida: {ganancia:.2f} USDT ({porcentaje:.2f}%)")
