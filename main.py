@@ -29,10 +29,10 @@ PARAMS = {
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
-    'rsi_buy_threshold': 40,
-    'rsi_sell_threshold': 60,
-    'take_profit': 1.0,
-    'stop_loss': 0.5,
+    'rsi_buy_threshold': 45, #40
+    'rsi_sell_threshold': 55, #60
+    'take_profit': 0.3, #1.0
+    'stop_loss': 0.2, #0.5
     'quantity': 0.001,
     'sleep_time': 30,
     'use_oco': True,
