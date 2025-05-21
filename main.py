@@ -165,20 +165,20 @@ def vender(precio_actual, rsi, razon="Señal de salida"):
     enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
 
     try:
-    global cantidad_acumulada  # Usamos la variable global que acumula compras
-    cantidad_a_vender = round(cantidad_acumulada, 6)  # Redondeamos a 6 decimales, como exige Binance
-
-    if cantidad_a_vender <= 0:
-        logging.warning("⚠️ No hay cantidad acumulada para vender. Venta cancelada.")
-        enviar_mensaje_telegram("⚠️ No hay BTC acumulado para vender. Venta cancelada.")
-        return  # Salimos sin ejecutar orden si no hay nada que vender
-
-    order = client.create_order(
-        symbol=PARAMS['symbol'],
-        side=Client.SIDE_SELL,
-        type=Client.ORDER_TYPE_MARKET,
-        quantity=cantidad_a_vender  # Aquí usamos el acumulado real
-    )
+        global cantidad_acumulada  # Usamos la variable global que acumula compras
+        cantidad_a_vender = round(cantidad_acumulada, 6)  # Redondeamos a 6 decimales, como exige Binance
+    
+        if cantidad_a_vender <= 0:
+            logging.warning("⚠️ No hay cantidad acumulada para vender. Venta cancelada.")
+            enviar_mensaje_telegram("⚠️ No hay BTC acumulado para vender. Venta cancelada.")
+            return  # Salimos sin ejecutar orden si no hay nada que vender
+    
+        order = client.create_order(
+            symbol=PARAMS['symbol'],
+            side=Client.SIDE_SELL,
+            type=Client.ORDER_TYPE_MARKET,
+            quantity=cantidad_a_vender  # Aquí usamos el acumulado real
+        )
     
         logging.info(f"[{ahora}] ✅ Orden VENTA ejecutada ID: {order['orderId']}")
         enviar_mensaje_telegram("✅ Orden de VENTA ejecutada")
