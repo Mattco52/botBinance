@@ -134,7 +134,7 @@ def comprar(precio_actual, rsi):
                     price=str(tp),
                     stopPrice=str(sl),
                     stopLimitPrice=str(sl),
-                    stopLimitTimeInForce='GTC'
+                    stopLimitTimeInForce='GTC',
                     aboveType='STOP'
                 )
                 oco_order_ids = [o['orderId'] for o in oco_order['orderReports']]
