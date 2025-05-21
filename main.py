@@ -135,6 +135,7 @@ def comprar(precio_actual, rsi):
                     stopPrice=str(sl),
                     stopLimitPrice=str(sl),
                     stopLimitTimeInForce='GTC'
+                    aboveType='STOP'
                 )
                 oco_order_ids = [o['orderId'] for o in oco_order['orderReports']]
                 logging.info(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl} | IDs: {oco_order_ids}")
