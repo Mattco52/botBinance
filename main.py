@@ -129,24 +129,24 @@ def comprar(precio_actual, rsi):
             tp = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
             sl = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
             try:
-global cantidad_acumulada
-cantidad_a_proteger = round(cantidad_acumulada, 6)
+                global cantidad_acumulada
+                cantidad_a_proteger = round(cantidad_acumulada, 6)
+                
+                if cantidad_a_proteger <= 0:
+                    logging.warning("⚠️ No hay cantidad acumulada para proteger con OCO.")
+                    enviar_mensaje_telegram("⚠️ No hay BTC acumulado para proteger con OCO.")
+                    return
 
-if cantidad_a_proteger <= 0:
-    logging.warning("⚠️ No hay cantidad acumulada para proteger con OCO.")
-    enviar_mensaje_telegram("⚠️ No hay BTC acumulado para proteger con OCO.")
-    return
-
-oco_order = client.create_oco_order(
-    symbol=PARAMS['symbol'],
-    side=Client.SIDE_SELL,
-    quantity=cantidad_a_proteger,
-    price=str(tp),
-    stopPrice=str(sl),
-    stopLimitPrice=str(sl),
-    stopLimitTimeInForce='GTC',
-    aboveType='STOP'
-)
+                    oco_order = client.create_oco_order(
+                        symbol=PARAMS['symbol'],
+                        side=Client.SIDE_SELL,
+                        quantity=cantidad_a_proteger,
+                        price=str(tp),
+                        stopPrice=str(sl),
+                        stopLimitPrice=str(sl),
+                        stopLimitTimeInForce='GTC',
+                        aboveType='STOP'
+                    )
                 oco_order_ids = [o['orderId'] for o in oco_order['orderReports']]
                 logging.info(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl} | IDs: {oco_order_ids}")
                 enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
