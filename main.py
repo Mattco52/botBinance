@@ -29,10 +29,10 @@ PARAMS = {
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
-    'rsi_buy_threshold': 45, #40
-    'rsi_sell_threshold': 55, #60
-    'take_profit': 0.3, #1.0
-    'stop_loss': 0.2, #0.5
+    'rsi_buy_threshold': 45,
+    'rsi_sell_threshold': 55,
+    'take_profit': 0.3,
+    'stop_loss': 0.2,
     'quantity': 0.001,
     'sleep_time': 30,
     'use_oco': True,
@@ -97,17 +97,17 @@ def calcular_indicadores():
     df['ema21'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
     df['rsi'] = RSIIndicator(df['close'], window=PARAMS['rsi_window']).rsi()
 
-    return df.iloc[-2], df.iloc[-1]  # fila anterior, fila actual
+    return df.iloc[-2], df.iloc[-1]
 
 # --- Estado de trading --- #
 posicion_abierta = False
 order_id = None
-oco_order_ids = []  # guardaremos los IDs de las órdenes OCO
+oco_order_ids = []
 rsi_anterior = None
 cantidad_acumulada = 0.0
 
 def comprar(precio_actual, rsi):
-    global posicion_abierta, order_id, oco_order_ids
+    global posicion_abierta, order_id, oco_order_ids, cantidad_acumulada
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje_telegram(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
@@ -128,31 +128,26 @@ def comprar(precio_actual, rsi):
         if PARAMS['use_oco']:
             tp = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
             sl = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
-            try:
-                global cantidad_acumulada
-                cantidad_a_proteger = round(cantidad_acumulada, 6)
-                
-                if cantidad_a_proteger <= 0:
-                    logging.warning("⚠️ No hay cantidad acumulada para proteger con OCO.")
-                    enviar_mensaje_telegram("⚠️ No hay BTC acumulado para proteger con OCO.")
-                    return
 
-                    oco_order = client.create_oco_order(
-                        symbol=PARAMS['symbol'],
-                        side=Client.SIDE_SELL,
-                        quantity=cantidad_a_proteger,
-                        price=str(tp),
-                        stopPrice=str(sl),
-                        stopLimitPrice=str(sl),
-                        stopLimitTimeInForce='GTC',
-                        aboveType='STOP'
-                    )
-                oco_order_ids = [o['orderId'] for o in oco_order['orderReports']]
-                logging.info(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl} | IDs: {oco_order_ids}")
-                enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
-            except Exception as e:
-                logging.error(f"Error al crear orden OCO: {e}")
-                enviar_mensaje_telegram(f"❌ Error al crear orden OCO:\n{str(e)}")
+            cantidad_a_proteger = round(cantidad_acumulada, 6)
+            if cantidad_a_proteger <= 0:
+                logging.warning("⚠️ No hay cantidad acumulada para proteger con OCO.")
+                enviar_mensaje_telegram("⚠️ No hay BTC acumulado para proteger con OCO.")
+                return
+
+            oco_order = client.create_oco_order(
+                symbol=PARAMS['symbol'],
+                side=Client.SIDE_SELL,
+                quantity=cantidad_a_proteger,
+                price=str(tp),
+                stopPrice=str(sl),
+                stopLimitPrice=str(sl),
+                stopLimitTimeInForce='GTC',
+                aboveType='STOP'
+            )
+            oco_order_ids = [o['orderId'] for o in oco_order['orderReports']]
+            logging.info(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl} | IDs: {oco_order_ids}")
+            enviar_mensaje_telegram(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
 
     except Exception as e:
         logging.error(f"Error al ejecutar orden de compra: {e}")
@@ -165,25 +160,26 @@ def vender(precio_actual, rsi, razon="Señal de salida"):
     enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
 
     try:
-        cantidad_a_vender = round(cantidad_acumulada, 6)  # Redondeamos a 6 decimales, como exige Binance
-    
+        cantidad_a_vender = round(cantidad_acumulada, 6)
         if cantidad_a_vender <= 0:
             logging.warning("⚠️ No hay cantidad acumulada para vender. Venta cancelada.")
             enviar_mensaje_telegram("⚠️ No hay BTC acumulado para vender. Venta cancelada.")
-            return  # Salimos sin ejecutar orden si no hay nada que vender
-    
+            return
+
         order = client.create_order(
             symbol=PARAMS['symbol'],
             side=Client.SIDE_SELL,
             type=Client.ORDER_TYPE_MARKET,
-            quantity=cantidad_a_vender  # Aquí usamos el acumulado real
+            quantity=cantidad_a_vender
         )
-    
+
         logging.info(f"[{ahora}] ✅ Orden VENTA ejecutada ID: {order['orderId']}")
         enviar_mensaje_telegram("✅ Orden de VENTA ejecutada")
         posicion_abierta = False
         order_id = None
         oco_order_ids = []
+        cantidad_acumulada = 0.0
+
     except Exception as e:
         logging.error(f"Error al ejecutar orden de venta: {e}")
         enviar_mensaje_telegram(f"❌ Error al VENDER:\n{str(e)}")
