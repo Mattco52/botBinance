@@ -159,13 +159,12 @@ def comprar(precio_actual, rsi):
         enviar_mensaje_telegram(f"❌ Error al COMPRAR:\n{str(e)}")
 
 def vender(precio_actual, rsi, razon="Señal de salida"):
-    global posicion_abierta, order_id, oco_order_ids
+    global posicion_abierta, order_id, oco_order_ids, cantidad_acumulada
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f} | Motivo: {razon}")
     enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
 
     try:
-        global cantidad_acumulada  # Usamos la variable global que acumula compras
         cantidad_a_vender = round(cantidad_acumulada, 6)  # Redondeamos a 6 decimales, como exige Binance
     
         if cantidad_a_vender <= 0:
