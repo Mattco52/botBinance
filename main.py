@@ -105,9 +105,10 @@ order_id = None
 oco_order_ids = []
 rsi_anterior = None
 cantidad_acumulada = 0.0
+precio_entrada_promedio = 0.0
 
 def comprar(precio_actual, rsi):
-    global posicion_abierta, order_id, oco_order_ids, cantidad_acumulada
+    global posicion_abierta, order_id, oco_order_ids, cantidad_acumulada, precio_entrada_promedio
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje_telegram(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
@@ -123,7 +124,10 @@ def comprar(precio_actual, rsi):
         logging.info(f"[{ahora}] ✅ Orden COMPRA ejecutada ID: {order_id}")
         enviar_mensaje_telegram("✅ Orden de COMPRA ejecutada")
         posicion_abierta = True
+
+        # Actualizar cantidad acumulada y promedio de entrada
         cantidad_acumulada += PARAMS['quantity']
+        precio_entrada_promedio = ((precio_entrada_promedio * (cantidad_acumulada - PARAMS['quantity'])) + (precio_actual * PARAMS['quantity'])) / cantidad_acumulada
 
         if PARAMS['use_oco']:
             tp = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
@@ -154,7 +158,7 @@ def comprar(precio_actual, rsi):
         enviar_mensaje_telegram(f"❌ Error al COMPRAR:\n{str(e)}")
 
 def vender(precio_actual, rsi, razon="Señal de salida"):
-    global posicion_abierta, order_id, oco_order_ids, cantidad_acumulada
+    global posicion_abierta, order_id, oco_order_ids, cantidad_acumulada, precio_entrada_promedio
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f} | Motivo: {razon}")
     enviar_mensaje_telegram(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
@@ -175,10 +179,19 @@ def vender(precio_actual, rsi, razon="Señal de salida"):
 
         logging.info(f"[{ahora}] ✅ Orden VENTA ejecutada ID: {order['orderId']}")
         enviar_mensaje_telegram("✅ Orden de VENTA ejecutada")
+
+        # Calcular ganancia estimada
+        ganancia = round((precio_actual - precio_entrada_promedio) * cantidad_a_vender, 2)
+        mensaje_ganancia = f"💰 Ganancia estimada: {ganancia} USDT"
+        logging.info(mensaje_ganancia)
+        enviar_mensaje_telegram(mensaje_ganancia)
+
+        # Resetear estado
         posicion_abierta = False
         order_id = None
         oco_order_ids = []
         cantidad_acumulada = 0.0
+        precio_entrada_promedio = 0.0
 
     except Exception as e:
         logging.error(f"Error al ejecutar orden de venta: {e}")
