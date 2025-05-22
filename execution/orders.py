@@ -48,8 +48,7 @@ def comprar(precio_actual, rsi):
                 price=str(tp),
                 stopPrice=str(sl),
                 stopLimitPrice=str(sl),
-                stopLimitTimeInForce='GTC',
-                aboveType='STOP'
+                stopLimitTimeInForce='GTC'
             )
             estado["oco_order_ids"] = [o['orderId'] for o in oco_order['orderReports']]
             enviar_mensaje(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
