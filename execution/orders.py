@@ -7,7 +7,7 @@ import logging
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
-# Cargar estado desde archivo
+# Cargar estado persistente
 estado = cargar_estado()
 
 def comprar(precio_actual, rsi):
@@ -26,11 +26,13 @@ def comprar(precio_actual, rsi):
         estado["estado"] = True
         estado["cantidad_acumulada"] += PARAMS['quantity']
 
-        # Actualizar precio de entrada promedio
+        # Recalcular promedio
         qty = PARAMS['quantity']
         old_qty = estado["cantidad_acumulada"] - qty
         old_avg = estado["precio_entrada_promedio"]
-        estado["precio_entrada_promedio"] = ((old_avg * old_qty) + (precio_actual * qty)) / estado["cantidad_acumulada"]
+        estado["precio_entrada_promedio"] = (
+            (old_avg * old_qty) + (precio_actual * qty)
+        ) / estado["cantidad_acumulada"]
 
         enviar_mensaje("✅ Orden de COMPRA ejecutada")
 
@@ -57,17 +59,18 @@ def comprar(precio_actual, rsi):
         logging.error(f"Error al comprar: {e}")
         enviar_mensaje(f"❌ Error al COMPRAR:\n{str(e)}")
 
-comprar.estado = lambda: estado["estado"]  # Para consultar si hay posición abierta
+comprar.estado = lambda: estado["estado"]  # Exponer estado actual
 
 def vender(precio_actual, rsi, razon="Salida"):
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
+    logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f} | Motivo: {razon}")
     enviar_mensaje(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
 
     try:
         cantidad = round(estado["cantidad_acumulada"], 6)
         if cantidad <= 0:
-            enviar_mensaje("⚠️ No hay cantidad acumulada para vender.")
+            logging.warning("⚠️ No hay cantidad acumulada para vender. Cancelando venta.")
+            enviar_mensaje("⚠️ No hay cantidad acumulada para vender. Venta cancelada.")
             return
 
         order = client.create_order(
@@ -80,7 +83,7 @@ def vender(precio_actual, rsi, razon="Salida"):
         ganancia = round((precio_actual - estado["precio_entrada_promedio"]) * cantidad, 2)
         enviar_mensaje(f"✅ Venta ejecutada\n💰 Ganancia estimada: {ganancia} USDT")
 
-        # Reset
+        # 🔁 Reset del estado
         estado["estado"] = False
         estado["order_id"] = None
         estado["oco_order_ids"] = []
@@ -88,6 +91,7 @@ def vender(precio_actual, rsi, razon="Salida"):
         estado["precio_entrada_promedio"] = 0.0
 
         guardar_estado(estado)
+        logging.info(f"[{ahora}] Estado reseteado tras venta. Estado actual: {estado}")
 
     except Exception as e:
         logging.error(f"Error al vender: {e}")
