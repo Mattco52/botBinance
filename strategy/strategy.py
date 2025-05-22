@@ -1,6 +1,6 @@
 from config.settings import PARAMS
 from data.market_data import obtener_datos, obtener_precio_actual
-from execution.orders import comprar, vender, verificar_cierre_oco
+from execution.orders import comprar, vender, verificar_cierre_oco, estado as estado_bot
 import logging
 from datetime import datetime
 
@@ -24,14 +24,17 @@ def ejecutar_estrategia():
     rsi = fila_act['rsi']
     rsi_prev = fila_ant['rsi']
 
-    if not comprar.estado and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
+    # CONDICIÓN DE COMPRA
+    if not comprar.estado() and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
         comprar(precio_actual, rsi)
 
-    elif comprar.estado:
+    # CONDICIÓN DE VENTA
+    elif estado_bot["estado"] and estado_bot["cantidad_acumulada"] > 0:
         if rsi > PARAMS['rsi_sell_threshold']:
             vender(precio_actual, rsi, "RSI sobre umbral de venta")
         elif rsi < 60 and rsi_prev > 60:
             vender(precio_actual, rsi, "RSI perdió momentum")
+
     else:
         logging.info(f"[{ahora}] ⚪ Sin señal clara | EMA9 > EMA21: {ema_ok} | RSI: {rsi:.2f}")
 
