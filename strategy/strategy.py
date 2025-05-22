@@ -24,8 +24,22 @@ def ejecutar_estrategia():
     rsi = fila_act['rsi']
     rsi_prev = fila_ant['rsi']
 
+    # Obtener timestamp de la vela actual
+    vela_timestamp = fila_act.name if hasattr(fila_act, 'name') else datetime.utcnow()
+    vela_actual_str = vela_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Obtener timestamp de la última compra
+    ultima_compra = estado_bot.get("ultima_compra_timestamp")
+
     # CONDICIÓN DE COMPRA
-    if not comprar.estado() and ema_ok and rsi < PARAMS['rsi_buy_threshold']:
+    puede_comprar = (
+        not comprar.estado()
+        and ema_ok
+        and rsi < PARAMS['rsi_buy_threshold']
+        and (not ultima_compra or ultima_compra < vela_actual_str)
+    )
+
+    if puede_comprar:
         comprar(precio_actual, rsi)
 
     # CONDICIÓN DE VENTA
@@ -36,6 +50,8 @@ def ejecutar_estrategia():
             vender(precio_actual, rsi, "RSI perdió momentum")
 
     else:
-        logging.info(f"[{ahora}] ⚪ Sin señal clara | EMA9 > EMA21: {ema_ok} | RSI: {rsi:.2f}")
+        logging.info(
+            f"[{ahora}] ⚪ Sin señal clara | EMA9 > EMA21: {ema_ok} | RSI: {rsi:.2f}"
+        )
 
     rsi_anterior = rsi
