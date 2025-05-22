@@ -1,7 +1,3 @@
-import os
-if os.path.exists("bot_state.json"):
-    os.remove("bot_state.json")
-
 import threading
 import time
 from web.server import app
