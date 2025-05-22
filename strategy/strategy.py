@@ -24,9 +24,19 @@ def ejecutar_estrategia():
     rsi = fila_act['rsi']
     rsi_prev = fila_ant['rsi']
 
-    # Obtener timestamp de la vela actual
-    vela_timestamp = fila_act.name if hasattr(fila_act, 'name') else datetime.utcnow()
-    vela_actual_str = vela_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+from datetime import datetime
+
+# Obtener timestamp de la vela actual desde el índice o columna
+timestamp_raw = fila_act.name if hasattr(fila_act, 'name') else None
+
+# Si es un entero, convertir a datetime
+if isinstance(timestamp_raw, int):
+    vela_timestamp = datetime.utcfromtimestamp(timestamp_raw / 1000)
+else:
+    vela_timestamp = timestamp_raw or datetime.utcnow()
+
+vela_actual_str = vela_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
 
     # Obtener timestamp de la última compra
     ultima_compra = estado_bot.get("ultima_compra_timestamp")
