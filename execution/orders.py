@@ -1,21 +1,16 @@
 from binance.client import Client
 from config.settings import PARAMS, API_KEY, SECRET_KEY, TESTNET
 from notifier.telegram import enviar_mensaje
+from execution.state_manager import cargar_estado, guardar_estado
 from datetime import datetime
 import logging
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
-# Estado de trading
-estado = False
-order_id = None
-oco_order_ids = []
-cantidad_acumulada = 0.0
-precio_entrada_promedio = 0.0
+# Cargar estado desde archivo
+estado = cargar_estado()
 
 def comprar(precio_actual, rsi):
-    global estado, order_id, oco_order_ids, cantidad_acumulada, precio_entrada_promedio
-
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
@@ -27,10 +22,15 @@ def comprar(precio_actual, rsi):
             type=Client.ORDER_TYPE_MARKET,
             quantity=PARAMS['quantity']
         )
-        order_id = order['orderId']
-        estado = True
-        cantidad_acumulada += PARAMS['quantity']
-        precio_entrada_promedio = ((precio_entrada_promedio * (cantidad_acumulada - PARAMS['quantity'])) + (precio_actual * PARAMS['quantity'])) / cantidad_acumulada
+        estado["order_id"] = order['orderId']
+        estado["estado"] = True
+        estado["cantidad_acumulada"] += PARAMS['quantity']
+
+        # Actualizar precio de entrada promedio
+        qty = PARAMS['quantity']
+        old_qty = estado["cantidad_acumulada"] - qty
+        old_avg = estado["precio_entrada_promedio"]
+        estado["precio_entrada_promedio"] = ((old_avg * old_qty) + (precio_actual * qty)) / estado["cantidad_acumulada"]
 
         enviar_mensaje("✅ Orden de COMPRA ejecutada")
 
@@ -41,31 +41,31 @@ def comprar(precio_actual, rsi):
             oco_order = client.create_oco_order(
                 symbol=PARAMS['symbol'],
                 side=Client.SIDE_SELL,
-                quantity=round(cantidad_acumulada, 6),
+                quantity=round(estado["cantidad_acumulada"], 6),
                 price=str(tp),
                 stopPrice=str(sl),
                 stopLimitPrice=str(sl),
                 stopLimitTimeInForce='GTC',
                 aboveType='STOP'
             )
-            oco_order_ids = [o['orderId'] for o in oco_order['orderReports']]
+            estado["oco_order_ids"] = [o['orderId'] for o in oco_order['orderReports']]
             enviar_mensaje(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
+
+        guardar_estado(estado)
 
     except Exception as e:
         logging.error(f"Error al comprar: {e}")
         enviar_mensaje(f"❌ Error al COMPRAR:\n{str(e)}")
 
-comprar.estado = lambda: estado  # Exponer estado
+comprar.estado = lambda: estado["estado"]  # Para consultar si hay posición abierta
 
 def vender(precio_actual, rsi, razon="Salida"):
-    global estado, order_id, oco_order_ids, cantidad_acumulada, precio_entrada_promedio
-
     ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
 
     try:
-        cantidad = round(cantidad_acumulada, 6)
+        cantidad = round(estado["cantidad_acumulada"], 6)
         if cantidad <= 0:
             enviar_mensaje("⚠️ No hay cantidad acumulada para vender.")
             return
@@ -76,28 +76,29 @@ def vender(precio_actual, rsi, razon="Salida"):
             type=Client.ORDER_TYPE_MARKET,
             quantity=cantidad
         )
-        ganancia = round((precio_actual - precio_entrada_promedio) * cantidad, 2)
+
+        ganancia = round((precio_actual - estado["precio_entrada_promedio"]) * cantidad, 2)
         enviar_mensaje(f"✅ Venta ejecutada\n💰 Ganancia estimada: {ganancia} USDT")
 
         # Reset
-        estado = False
-        order_id = None
-        oco_order_ids = []
-        cantidad_acumulada = 0.0
-        precio_entrada_promedio = 0.0
+        estado["estado"] = False
+        estado["order_id"] = None
+        estado["oco_order_ids"] = []
+        estado["cantidad_acumulada"] = 0.0
+        estado["precio_entrada_promedio"] = 0.0
+
+        guardar_estado(estado)
 
     except Exception as e:
         logging.error(f"Error al vender: {e}")
         enviar_mensaje(f"❌ Error al VENDER:\n{str(e)}")
 
 def verificar_cierre_oco():
-    global estado, oco_order_ids
-
-    if not estado or not oco_order_ids:
+    if not estado["estado"] or not estado["oco_order_ids"]:
         return
 
     cerradas = 0
-    for oid in oco_order_ids:
+    for oid in estado["oco_order_ids"]:
         try:
             order = client.get_order(symbol=PARAMS['symbol'], orderId=oid)
             if order['status'] in ['FILLED', 'CANCELED', 'REJECTED', 'EXPIRED']:
@@ -105,7 +106,8 @@ def verificar_cierre_oco():
         except Exception as e:
             logging.warning(f"Error al verificar orden {oid}: {e}")
 
-    if cerradas == len(oco_order_ids):
-        estado = False
-        oco_order_ids = []
+    if cerradas == len(estado["oco_order_ids"]):
+        estado["estado"] = False
+        estado["oco_order_ids"] = []
+        guardar_estado(estado)
         enviar_mensaje("📉 OCO ejecutado. Posición cerrada.")
