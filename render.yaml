@@ -5,8 +5,8 @@ services:
     plan: Starter
     repo: https://github.com/Mattco52/botBinance  # TODO: Reemplaza con tu URL real
     branch: main
-    buildCommand: pip install -r requirements2.txt
-    startCommand: python main2.py
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
     envVars:
       - key: API_KEY
       - key: SECRET_KEY
