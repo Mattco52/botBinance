@@ -22,7 +22,7 @@ PARAMS = {
     'sleep_time': 30,
     
     # Orden OCO
-    'use_oco': True,
+    'use_oco': False,  # No usar OCO en testnet, usar lógica simulada en su lugar
     
     # Trailing Stop dinámico (solo si use_oco == False)
     'use_trailing_stop': True,
