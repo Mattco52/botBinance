@@ -24,20 +24,18 @@ def ejecutar_estrategia():
     rsi = fila_act['rsi']
     rsi_prev = fila_ant['rsi']
 
-    # Obtener timestamp de la vela actual (última cerrada)
+    # Obtener timestamp de la vela actual
     timestamp_raw = fila_act.name if hasattr(fila_act, 'name') else None
-
     if isinstance(timestamp_raw, int):
         vela_timestamp = datetime.utcfromtimestamp(timestamp_raw / 1000)
     else:
         vela_timestamp = timestamp_raw or datetime.utcnow()
-
     vela_actual_str = vela_timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
     # Timestamp de la última compra
     ultima_compra = estado_bot.get("ultima_compra_timestamp")
 
-    # CONDICIÓN DE COMPRA (con protección de vela)
+    # CONDICIÓN DE COMPRA
     puede_comprar = (
         not comprar.estado()
         and ema_ok
@@ -48,16 +46,24 @@ def ejecutar_estrategia():
     if puede_comprar:
         comprar(precio_actual, rsi)
 
-    # CONDICIÓN DE VENTA
+    # CONDICIÓN DE VENTA por señales técnicas
     elif estado_bot["estado"] and estado_bot["cantidad_acumulada"] > 0:
         if rsi > PARAMS['rsi_sell_threshold']:
             vender(precio_actual, rsi, "RSI sobre umbral de venta")
         elif rsi < 60 and rsi_prev > 60:
             vender(precio_actual, rsi, "RSI perdió momentum")
 
+    # ✅ OCO SIMULADO (si use_oco = False)
+    if estado_bot["estado"] and not PARAMS['use_oco']:
+        tp = estado_bot["precio_entrada_promedio"] * (1 + PARAMS['take_profit'] / 100)
+        sl = estado_bot["precio_entrada_promedio"] * (1 - PARAMS['stop_loss'] / 100)
+
+        if precio_actual >= tp:
+            vender(precio_actual, rsi, "TP alcanzado (simulado)")
+        elif precio_actual <= sl:
+            vender(precio_actual, rsi, "SL alcanzado (simulado)")
+
     else:
-        logging.info(
-            f"[{ahora}] ⚪ Sin señal clara | EMA9 > EMA21: {ema_ok} | RSI: {rsi:.2f}"
-        )
+        logging.info(f"[{ahora}] ⚪ Sin señal clara | EMA9 > EMA21: {ema_ok} | RSI: {rsi:.2f}")
 
     rsi_anterior = rsi
