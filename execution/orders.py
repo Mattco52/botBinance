@@ -27,13 +27,19 @@ def comprar(precio_actual, rsi):
         estado["estado"] = True
         estado["cantidad_acumulada"] += PARAMS['quantity']
 
-        # Recalcular promedio ponderado
+        # Recalcular precio promedio ponderado
         qty = PARAMS['quantity']
         old_qty = estado["cantidad_acumulada"] - qty
         old_avg = estado["precio_entrada_promedio"]
         estado["precio_entrada_promedio"] = (
             (old_avg * old_qty + precio_actual * qty) / estado["cantidad_acumulada"]
         )
+
+        # ✅ Registrar la marca de tiempo de la compra
+        estado["ultima_compra_timestamp"] = ahora
+
+        # ✅ Iniciar precio máximo para trailing stop
+        estado["precio_maximo"] = precio_actual
 
         enviar_mensaje("✅ Orden de COMPRA ejecutada")
 
@@ -53,10 +59,6 @@ def comprar(precio_actual, rsi):
             estado["oco_order_ids"] = [o['orderId'] for o in oco_order['orderReports']]
             enviar_mensaje(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
 
-        # ✅ Registrar timestamp de la compra
-        estado["ultima_compra_timestamp"] = ahora
-
-        # ✅ Guardar el estado actualizado
         guardar_estado(estado)
 
     except Exception as e:
@@ -87,13 +89,14 @@ def vender(precio_actual, rsi, razon="Salida"):
         ganancia = round((precio_actual - estado["precio_entrada_promedio"]) * cantidad, 2)
         enviar_mensaje(f"✅ Venta ejecutada\n💰 Ganancia estimada: {ganancia} USDT")
 
-        # 🔁 Reset completo del estado
+        # 🔁 Reset del estado
         estado["estado"] = False
         estado["order_id"] = None
         estado["oco_order_ids"] = []
         estado["cantidad_acumulada"] = 0.0
         estado["precio_entrada_promedio"] = 0.0
         estado["ultima_compra_timestamp"] = None
+        estado["precio_maximo"] = 0.0
 
         guardar_estado(estado)
         logging.info(f"[{ahora}] Estado reseteado tras venta. Estado actual: {estado}")
