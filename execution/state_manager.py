@@ -8,6 +8,7 @@ default_state = {
     "order_id": None,
     "oco_order_ids": [],
     "cantidad_acumulada": 0.0,
+    'precio_maximo': 0.0,
     "precio_entrada_promedio": 0.0,
     "ultima_compra_timestamp": None  # Nueva clave para evitar doble compra por vela
 }
