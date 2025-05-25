@@ -10,12 +10,14 @@ PARAMS = {
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
-    'rsi_buy_threshold': 45,
-    'rsi_sell_threshold': 55,
+    'rsi_buy_threshold': 40,
+    'rsi_sell_threshold': 60,
     
     # Gestión de riesgo
     'take_profit': 0.3,      # en porcentaje
     'stop_loss': 0.2,        # en porcentaje
+    'trailing_stop_pct': 0.3,
+    'use_trailing_stop': False,
     'quantity': 0.001,
     
     # Tiempo entre ciclos
