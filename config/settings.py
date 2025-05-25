@@ -16,8 +16,13 @@ PARAMS = {
     # Gestión de riesgo
     'take_profit': 0.5,      # en porcentaje
     'stop_loss': 0.2,        # en porcentaje
+
+    # Cantidad base (solo usada si no se usa cálculo dinámico)
     'quantity': 0.001,
-    
+
+    # Factor para calcular cantidad mínima automática
+    'quantity_factor': 1.1,  # ✅ Aumenta 10% sobre el mínimo notional
+
     # Tiempo entre ciclos
     'sleep_time': 30,
     
