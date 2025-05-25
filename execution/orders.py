@@ -2,6 +2,7 @@ from binance.client import Client
 from config.settings import PARAMS, API_KEY, SECRET_KEY, TESTNET
 from notifier.telegram import enviar_mensaje
 from execution.state_manager import guardar_estado
+from logger.logs import log_operacion  # ✅ NUEVO
 from datetime import datetime
 import logging
 
@@ -24,7 +25,6 @@ def comprar(precio_actual, rsi, symbol, estado):
         estado["estado"] = True
         estado["cantidad_acumulada"] += PARAMS['quantity']
 
-        # Recalcular precio promedio ponderado
         qty = PARAMS['quantity']
         old_qty = estado["cantidad_acumulada"] - qty
         old_avg = estado["precio_entrada_promedio"]
@@ -87,6 +87,9 @@ def vender(precio_actual, rsi, symbol, estado, razon="Salida"):
             f"💰 Ganancia estimada: {ganancia} USDT\n"
             f"📈 Rendimiento: {rendimiento}%"
         )
+
+        # ✅ Registrar operación en log CSV
+        log_operacion(symbol, precio_actual, ganancia, rendimiento, razon)
 
         estado["estado"] = False
         estado["order_id"] = None
