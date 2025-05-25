@@ -98,6 +98,9 @@ def vender(precio_actual, rsi, razon="Salida"):
         estado["ultima_compra_timestamp"] = None
         estado["precio_maximo"] = 0.0
 
+        # ✅ Guardar timestamp de venta para cooldown
+        estado["ultima_venta_timestamp"] = ahora
+
         guardar_estado(estado)
         logging.info(f"[{ahora}] Estado reseteado tras venta. Estado actual: {estado}")
 
