@@ -2,7 +2,8 @@ from binance.client import Client
 from config.settings import PARAMS, API_KEY, SECRET_KEY, TESTNET
 from notifier.telegram import enviar_mensaje
 from execution.state_manager import guardar_estado
-from logger.logs import log_operacion  # ✅ NUEVO
+from logger.logs import log_operacion
+from utils.binance_filters import cumple_min_notional  # ✅ NUEVO
 from datetime import datetime
 import logging
 
@@ -12,6 +13,12 @@ def comprar(precio_actual, rsi, symbol, estado):
     ahora = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] [{symbol}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje(f"🟢 [{symbol}] Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
+
+    # ✅ Validar si cumple el mínimo NOTIONAL
+    if not cumple_min_notional(symbol, precio_actual, PARAMS["quantity"]):
+        enviar_mensaje(f"⚠️ [{symbol}] Orden cancelada: No cumple el mínimo NOTIONAL.")
+        logging.warning(f"[{symbol}] Orden cancelada: Valor = {precio_actual * PARAMS['quantity']:.2f} < mínimo permitido.")
+        return
 
     try:
         order = client.create_order(
@@ -88,7 +95,6 @@ def vender(precio_actual, rsi, symbol, estado, razon="Salida"):
             f"📈 Rendimiento: {rendimiento}%"
         )
 
-        # ✅ Registrar operación en log CSV
         log_operacion(symbol, precio_actual, ganancia, rendimiento, razon)
 
         estado["estado"] = False
