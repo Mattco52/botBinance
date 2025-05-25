@@ -86,8 +86,17 @@ def vender(precio_actual, rsi, razon="Salida"):
             quantity=cantidad
         )
 
-        ganancia = round((precio_actual - estado["precio_entrada_promedio"]) * cantidad, 2)
-        enviar_mensaje(f"✅ Venta ejecutada\n💰 Ganancia estimada: {ganancia} USDT")
+        # Calcular ganancia en USDT y porcentaje
+        precio_entrada = estado["precio_entrada_promedio"]
+        ganancia = round((precio_actual - precio_entrada) * cantidad, 2)
+        rendimiento = round(((precio_actual - precio_entrada) / precio_entrada) * 100, 2)
+
+        # Enviar mensaje completo a Telegram
+        enviar_mensaje(
+            f"✅ Venta ejecutada\n"
+            f"💰 Ganancia estimada: {ganancia} USDT\n"
+            f"📈 Rendimiento: {rendimiento}%"
+        )
 
         # 🔁 Reset del estado
         estado["estado"] = False
@@ -96,10 +105,8 @@ def vender(precio_actual, rsi, razon="Salida"):
         estado["cantidad_acumulada"] = 0.0
         estado["precio_entrada_promedio"] = 0.0
         estado["ultima_compra_timestamp"] = None
-        estado["precio_maximo"] = 0.0
-
-        # ✅ Guardar timestamp de venta para cooldown
         estado["ultima_venta_timestamp"] = ahora
+        estado["precio_maximo"] = 0.0
 
         guardar_estado(estado)
         logging.info(f"[{ahora}] Estado reseteado tras venta. Estado actual: {estado}")
