@@ -1,23 +1,20 @@
 from binance.client import Client
 from config.settings import PARAMS, API_KEY, SECRET_KEY, TESTNET
 from notifier.telegram import enviar_mensaje
-from execution.state_manager import cargar_estado, guardar_estado
+from execution.state_manager import guardar_estado
 from datetime import datetime
 import logging
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
-# Cargar estado persistente
-estado = cargar_estado()
-
-def comprar(precio_actual, rsi):
+def comprar(precio_actual, rsi, symbol, estado):
     ahora = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    logging.info(f"[{ahora}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
-    enviar_mensaje(f"🟢 Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
+    logging.info(f"[{ahora}] [{symbol}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
+    enviar_mensaje(f"🟢 [{symbol}] Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
     try:
         order = client.create_order(
-            symbol=PARAMS['symbol'],
+            symbol=symbol,
             side=Client.SIDE_BUY,
             type=Client.ORDER_TYPE_MARKET,
             quantity=PARAMS['quantity']
@@ -35,20 +32,17 @@ def comprar(precio_actual, rsi):
             (old_avg * old_qty + precio_actual * qty) / estado["cantidad_acumulada"]
         )
 
-        # ✅ Registrar la marca de tiempo de la compra
         estado["ultima_compra_timestamp"] = ahora
-
-        # ✅ Iniciar precio máximo para trailing stop
         estado["precio_maximo"] = precio_actual
 
-        enviar_mensaje("✅ Orden de COMPRA ejecutada")
+        enviar_mensaje(f"✅ [{symbol}] Orden de COMPRA ejecutada")
 
         if PARAMS['use_oco']:
             tp = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
             sl = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
 
             oco_order = client.create_oco_order(
-                symbol=PARAMS['symbol'],
+                symbol=symbol,
                 side=Client.SIDE_SELL,
                 quantity=round(estado["cantidad_acumulada"], 6),
                 price=str(tp),
@@ -57,48 +51,43 @@ def comprar(precio_actual, rsi):
                 stopLimitTimeInForce='GTC'
             )
             estado["oco_order_ids"] = [o['orderId'] for o in oco_order['orderReports']]
-            enviar_mensaje(f"🔷 OCO configurado\nTP: {tp} | SL: {sl}")
+            enviar_mensaje(f"🔷 [{symbol}] OCO configurado\nTP: {tp} | SL: {sl}")
 
-        guardar_estado(estado)
+        guardar_estado(symbol, estado)
 
     except Exception as e:
-        logging.error(f"Error al comprar: {e}")
-        enviar_mensaje(f"❌ Error al COMPRAR:\n{str(e)}")
+        logging.error(f"[{symbol}] Error al comprar: {e}")
+        enviar_mensaje(f"❌ [{symbol}] Error al COMPRAR:\n{str(e)}")
 
-comprar.estado = lambda: estado["estado"]
-
-def vender(precio_actual, rsi, razon="Salida"):
+def vender(precio_actual, rsi, symbol, estado, razon="Salida"):
     ahora = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    logging.info(f"[{ahora}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f} | Motivo: {razon}")
-    enviar_mensaje(f"🔴 Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
+    logging.info(f"[{ahora}] [{symbol}] 🔴 Ejecutando VENTA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f} | Motivo: {razon}")
+    enviar_mensaje(f"🔴 [{symbol}] Señal de VENTA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}\nMotivo: {razon}")
 
     try:
         cantidad = round(estado["cantidad_acumulada"], 6)
         if cantidad <= 0:
-            logging.warning("⚠️ No hay cantidad acumulada para vender. Cancelando venta.")
-            enviar_mensaje("⚠️ No hay cantidad acumulada para vender. Venta cancelada.")
+            logging.warning(f"[{symbol}] ⚠️ No hay cantidad acumulada para vender.")
+            enviar_mensaje(f"⚠️ [{symbol}] No hay cantidad acumulada para vender.")
             return
 
         order = client.create_order(
-            symbol=PARAMS['symbol'],
+            symbol=symbol,
             side=Client.SIDE_SELL,
             type=Client.ORDER_TYPE_MARKET,
             quantity=cantidad
         )
 
-        # Calcular ganancia en USDT y porcentaje
         precio_entrada = estado["precio_entrada_promedio"]
         ganancia = round((precio_actual - precio_entrada) * cantidad, 2)
         rendimiento = round(((precio_actual - precio_entrada) / precio_entrada) * 100, 2)
 
-        # Enviar mensaje completo a Telegram
         enviar_mensaje(
-            f"✅ Venta ejecutada\n"
+            f"✅ [{symbol}] Venta ejecutada\n"
             f"💰 Ganancia estimada: {ganancia} USDT\n"
             f"📈 Rendimiento: {rendimiento}%"
         )
 
-        # 🔁 Reset del estado
         estado["estado"] = False
         estado["order_id"] = None
         estado["oco_order_ids"] = []
@@ -108,28 +97,28 @@ def vender(precio_actual, rsi, razon="Salida"):
         estado["ultima_venta_timestamp"] = ahora
         estado["precio_maximo"] = 0.0
 
-        guardar_estado(estado)
-        logging.info(f"[{ahora}] Estado reseteado tras venta. Estado actual: {estado}")
+        guardar_estado(symbol, estado)
+        logging.info(f"[{ahora}] [{symbol}] Estado reseteado tras venta. Estado actual: {estado}")
 
     except Exception as e:
-        logging.error(f"Error al vender: {e}")
-        enviar_mensaje(f"❌ Error al VENDER:\n{str(e)}")
+        logging.error(f"[{symbol}] Error al vender: {e}")
+        enviar_mensaje(f"❌ [{symbol}] Error al VENDER:\n{str(e)}")
 
-def verificar_cierre_oco():
+def verificar_cierre_oco(symbol, estado):
     if not estado["estado"] or not estado["oco_order_ids"]:
         return
 
     cerradas = 0
     for oid in estado["oco_order_ids"]:
         try:
-            order = client.get_order(symbol=PARAMS['symbol'], orderId=oid)
+            order = client.get_order(symbol=symbol, orderId=oid)
             if order['status'] in ['FILLED', 'CANCELED', 'REJECTED', 'EXPIRED']:
                 cerradas += 1
         except Exception as e:
-            logging.warning(f"Error al verificar orden {oid}: {e}")
+            logging.warning(f"[{symbol}] Error al verificar orden {oid}: {e}")
 
     if cerradas == len(estado["oco_order_ids"]):
         estado["estado"] = False
         estado["oco_order_ids"] = []
-        guardar_estado(estado)
-        enviar_mensaje("📉 OCO ejecutado. Posición cerrada.")
+        guardar_estado(symbol, estado)
+        enviar_mensaje(f"📉 [{symbol}] OCO ejecutado. Posición cerrada.")
