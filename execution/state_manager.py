@@ -10,7 +10,8 @@ default_state = {
     "cantidad_acumulada": 0.0,
     'precio_maximo': 0.0,
     "precio_entrada_promedio": 0.0,
-    "ultima_compra_timestamp": None  # Nueva clave para evitar doble compra por vela
+    "ultima_compra_timestamp": None,  # Nueva clave para evitar doble compra por vela
+    "ultima_venta_timestamp": None
 }
 
 def cargar_estado():
@@ -22,10 +23,11 @@ def cargar_estado():
         with open(STATE_FILE, "r") as f:
             data = json.load(f)
 
-        # Validar que tenga todas las claves necesarias
+        # Validar que tenga todas las claves necesarias, incluida ultima_venta_timestamp
         for key in default_state:
             if key not in data:
                 data[key] = default_state[key]
+
         return data
 
     except Exception as e:
