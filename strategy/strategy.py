@@ -32,20 +32,18 @@ def ejecutar_estrategia():
         vela_timestamp = timestamp_raw or datetime.utcnow()
     vela_actual_str = vela_timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
-    # Marcas de tiempo de última compra y venta
     ultima_compra = estado_bot.get("ultima_compra_timestamp")
     ultima_venta = estado_bot.get("ultima_venta_timestamp")
 
-    # Calcular si estamos en cooldown post-venta
     cooldown_termina = None
     if ultima_venta:
         try:
             cooldown_termina = datetime.strptime(ultima_venta, "%Y-%m-%d %H:%M:%S") + timedelta(minutes=3)
         except Exception:
             cooldown_termina = None
+
     ahora_dt = datetime.utcnow()
 
-    # CONDICIÓN DE COMPRA con protección por vela y cooldown
     puede_comprar = (
         not comprar.estado()
         and ema_ok
@@ -57,14 +55,15 @@ def ejecutar_estrategia():
     if puede_comprar:
         comprar(precio_actual, rsi)
 
-    # CONDICIÓN DE VENTA por RSI
+    # VENTA por RSI con ganancia mínima
     elif estado_bot["estado"] and estado_bot["cantidad_acumulada"] > 0:
-        if rsi > PARAMS['rsi_sell_threshold']:
-            vender(precio_actual, rsi, "RSI sobre umbral de venta")
-        elif rsi < 60 and rsi_prev > 60:
-            vender(precio_actual, rsi, "RSI perdió momentum")
+        ganancia = round((precio_actual - estado_bot["precio_entrada_promedio"]) * estado_bot["cantidad_acumulada"], 2)
+        if rsi > PARAMS['rsi_sell_threshold'] and ganancia >= 0.2:
+            vender(precio_actual, rsi, "RSI sobre umbral de venta con ganancia")
+        elif rsi < 60 and rsi_prev > 60 and ganancia >= 0.2:
+            vender(precio_actual, rsi, "RSI perdió momentum con ganancia")
 
-    # ✅ SIMULACIÓN DE TP / TRAILING STOP si no se usa OCO
+    # SIMULACIÓN TP / SL / TRAILING
     if estado_bot["estado"] and not PARAMS['use_oco']:
         entrada = estado_bot["precio_entrada_promedio"]
         cantidad = estado_bot["cantidad_acumulada"]
