@@ -3,7 +3,7 @@ from config.settings import PARAMS, API_KEY, SECRET_KEY, TESTNET
 from notifier.telegram import enviar_mensaje
 from execution.state_manager import guardar_estado
 from logger.logs import log_operacion
-from utils.binance_filters import cumple_min_notional  # ✅ NUEVO
+from utils.binance_filters import calcular_cantidad_valida  # ✅ NUEVO
 from datetime import datetime
 import logging
 
@@ -14,10 +14,12 @@ def comprar(precio_actual, rsi, symbol, estado):
     logging.info(f"[{ahora}] [{symbol}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje(f"🟢 [{symbol}] Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
-    # ✅ Validar si cumple el mínimo NOTIONAL
-    if not cumple_min_notional(symbol, precio_actual, PARAMS["quantity"]):
-        enviar_mensaje(f"⚠️ [{symbol}] Orden cancelada: No cumple el mínimo NOTIONAL.")
-        logging.warning(f"[{symbol}] Orden cancelada: Valor = {precio_actual * PARAMS['quantity']:.2f} < mínimo permitido.")
+    # ✅ Calcular cantidad válida automáticamente
+    cantidad_calculada = calcular_cantidad_valida(symbol, precio_actual)
+
+    if cantidad_calculada is None:
+        enviar_mensaje(f"❌ [{symbol}] No se pudo calcular una cantidad válida para la orden.")
+        logging.warning(f"[{symbol}] Cancelando compra: cantidad inválida.")
         return
 
     try:
@@ -25,14 +27,14 @@ def comprar(precio_actual, rsi, symbol, estado):
             symbol=symbol,
             side=Client.SIDE_BUY,
             type=Client.ORDER_TYPE_MARKET,
-            quantity=PARAMS['quantity']
+            quantity=cantidad_calculada
         )
 
         estado["order_id"] = order['orderId']
         estado["estado"] = True
-        estado["cantidad_acumulada"] += PARAMS['quantity']
+        estado["cantidad_acumulada"] += cantidad_calculada
 
-        qty = PARAMS['quantity']
+        qty = cantidad_calculada
         old_qty = estado["cantidad_acumulada"] - qty
         old_avg = estado["precio_entrada_promedio"]
         estado["precio_entrada_promedio"] = (
