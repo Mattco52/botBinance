@@ -14,10 +14,8 @@ PARAMS = {
     'rsi_sell_threshold': 60,
     
     # Gestión de riesgo
-    'take_profit': 0.3,      # en porcentaje
+    'take_profit': 0.5,      # en porcentaje
     'stop_loss': 0.2,        # en porcentaje
-    'trailing_stop_pct': 0.3,
-    'use_trailing_stop': False,
     'quantity': 0.001,
     
     # Tiempo entre ciclos
@@ -28,7 +26,7 @@ PARAMS = {
     
     # Trailing Stop dinámico (solo si use_oco == False)
     'use_trailing_stop': True,
-    'trailing_stop_pct': 1.5  # % bajo el máximo alcanzado
+    'trailing_stop_pct': 0.5  # % bajo el máximo alcanzado
 }
 
 # Claves API y entorno
