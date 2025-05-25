@@ -40,7 +40,7 @@ def ejecutar_estrategia():
     cooldown_termina = None
     if ultima_venta:
         try:
-            cooldown_termina = datetime.strptime(ultima_venta, "%Y-%m-%d %H:%M:%S") + timedelta(minutes=5)
+            cooldown_termina = datetime.strptime(ultima_venta, "%Y-%m-%d %H:%M:%S") + timedelta(minutes=3)
         except Exception:
             cooldown_termina = None
     ahora_dt = datetime.utcnow()
