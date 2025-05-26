@@ -10,12 +10,16 @@ def calcular_cantidad_valida(symbol, precio_actual):
         step_size = 0.000001
 
         for f in info["filters"]:
-            if f["filterType"] == "MIN_NOTIONAL":
-                min_notional = float(f["notional"])
+            if f["filterType"] in ["MIN_NOTIONAL", "NOTIONAL"]:
+                if "minNotional" in f:
+                    min_notional = float(f["minNotional"])
+                elif "notional" in f:
+                    min_notional = float(f["notional"])
             if f["filterType"] == "LOT_SIZE":
                 step_size = float(f["stepSize"])
 
         if not min_notional:
+            print(f"[{symbol}] No se encontró filtro MIN_NOTIONAL o NOTIONAL.")
             return None
 
         cantidad = (min_notional / precio_actual) * PARAMS.get("quantity_factor", 1.0)
@@ -25,5 +29,5 @@ def calcular_cantidad_valida(symbol, precio_actual):
         return cantidad
 
     except Exception as e:
-        print(f"[{symbol}] Error al calcular cantidad mínima: {e}")
+        print(f"[{symbol}] Error al calcular cantidad válida: {e}")
         return None
