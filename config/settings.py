@@ -10,8 +10,8 @@ PARAMS = {
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
-    'rsi_buy_threshold': 40,
-    'rsi_sell_threshold': 60,
+    'rsi_buy_threshold': 45,
+    'rsi_sell_threshold': 65,
     
     # Gestión de riesgo
     'take_profit': 0.5,      # en porcentaje
