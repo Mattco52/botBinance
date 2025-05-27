@@ -1,21 +1,25 @@
 import os
 import requests
-import logging
-from config.settings import TELEGRAM_TOKEN, CHAT_ID
+
+# Leer desde variables de entorno
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def enviar_mensaje(texto):
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        logging.warning("⚠️ TELEGRAM_TOKEN o CHAT_ID no configurado.")
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️ Faltan variables de entorno para Telegram.")
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
-        "chat_id": CHAT_ID,
-        "text": texto
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": texto,
+        "parse_mode": "Markdown"
     }
 
     try:
-        response = requests.post(url, data=payload, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error enviando mensaje a Telegram: {e}")
+        response = requests.post(url, json=payload)
+        if response.status_code != 200:
+            print(f"❌ Error al enviar mensaje: {response.text}")
+    except Exception as e:
+        print(f"❌ Excepción al enviar mensaje: {e}")
