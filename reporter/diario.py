@@ -3,39 +3,33 @@ import csv
 from datetime import datetime
 from notifier.telegram import enviar_mensaje
 
-def enviar_resumen_diario(symbols):
-    resumen = []
+def resumen_diario(symbols):
     total_usdt = 0.0
+    resumen = "📊 Resumen Diario de Ganancias:\n\n"
 
     for symbol in symbols:
-        path = f"logs/operaciones_{symbol}.csv"
-        if not os.path.exists(path):
-            continue
-
+        archivo = f"logs/operaciones_{symbol}.csv"
         ganancia_total = 0.0
         rendimiento_total = 0.0
-        operaciones = 0
+        cantidad = 0
 
-        with open(path, "r") as f:
+        if not os.path.exists(archivo):
+            continue
+
+        with open(archivo, "r") as f:
             reader = csv.DictReader(f)
-            for row in reader:
-                timestamp = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S")
-                hoy = datetime.utcnow().date()
-                if timestamp.date() == hoy:
-                    ganancia_total += float(row["ganancia"])
-                    rendimiento_total += float(row["rendimiento_pct"])
-                    operaciones += 1
+            for fila in reader:
+                fecha = fila["timestamp"][:10]
+                hoy = datetime.utcnow().strftime("%Y-%m-%d")
+                if fecha == hoy:
+                    ganancia_total += float(fila["ganancia"])
+                    rendimiento_total += float(fila["rendimiento_pct"])
+                    cantidad += 1
 
-        if operaciones > 0:
-            prom_rendimiento = rendimiento_total / operaciones
+        if cantidad > 0:
+            promedio_rend = rendimiento_total / cantidad
+            resumen += f"{symbol}: {ganancia_total:.2f} USDT ({promedio_rend:.2f}%)\n"
             total_usdt += ganancia_total
-            resumen.append(f"{symbol}: {ganancia_total:+.2f} USDT ({prom_rendimiento:+.2f}%)")
 
-    if not resumen:
-        enviar_mensaje("📊 Resumen Diario: No hubo operaciones hoy.")
-        return
-
-    mensaje = "📊 Resumen Diario de Ganancias:\n\n"
-    mensaje += "\n".join(resumen)
-    mensaje += f"\n---------------------------\nTOTAL: {total_usdt:+.2f} USDT"
-    enviar_mensaje(mensaje)
+    resumen += "\nTOTAL: {:.2f} USDT".format(total_usdt)
+    enviar_mensaje(resumen)
