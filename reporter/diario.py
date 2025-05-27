@@ -3,7 +3,7 @@ import csv
 from datetime import datetime
 from notifier.telegram import enviar_mensaje
 
-def resumen_diario(symbols):
+def enviar_resumen_diario(symbols):
     total_usdt = 0.0
     resumen = "📊 Resumen Diario de Ganancias:\n\n"
 
@@ -22,9 +22,12 @@ def resumen_diario(symbols):
                 fecha = fila["timestamp"][:10]
                 hoy = datetime.utcnow().strftime("%Y-%m-%d")
                 if fecha == hoy:
-                    ganancia_total += float(fila["ganancia"])
-                    rendimiento_total += float(fila["rendimiento_pct"])
-                    cantidad += 1
+                    try:
+                        ganancia_total += float(fila["ganancia"])
+                        rendimiento_total += float(fila["rendimiento_pct"])
+                        cantidad += 1
+                    except:
+                        continue
 
         if cantidad > 0:
             promedio_rend = rendimiento_total / cantidad
