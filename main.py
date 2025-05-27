@@ -1,38 +1,45 @@
+import threading
+import time
 import os
-import csv
-from datetime import datetime
-from notifier.telegram import enviar_mensaje
+import schedule
+from web.server import app
+from strategy.strategy import ejecutar_estrategia
+from notifier.logger import configurar_logger
+from reporter.diario import enviar_resumen_diario  # ✅ NUEVO
 
-def enviar_resumen_diario(symbols):
-    total_usdt = 0.0
-    resumen = "📊 Resumen Diario de Ganancias:\n\n"
+# ✅ Lista de símbolos a operar
+SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "AVAXUSDT"]
 
-    for symbol in symbols:
-        archivo = f"logs/operaciones_{symbol}.csv"
-        ganancia_total = 0.0
-        rendimiento_total = 0.0
-        cantidad = 0
+# ✅ Tiempo entre ciclos de estrategia
+SLEEP_TIME = 30
 
-        if not os.path.exists(archivo):
-            continue
+# ✅ Hilo de ejecución del bot por símbolo
+def run_bot(symbol):
+    while True:
+        try:
+            ejecutar_estrategia(symbol)
+        except Exception as e:
+            print(f"[ERROR] {symbol}: {e}")
+        time.sleep(SLEEP_TIME)
 
-        with open(archivo, "r") as f:
-            reader = csv.DictReader(f)
-            for fila in reader:
-                fecha = fila["timestamp"][:10]
-                hoy = datetime.utcnow().strftime("%Y-%m-%d")
-                if fecha == hoy:
-                    try:
-                        ganancia_total += float(fila["ganancia"])
-                        rendimiento_total += float(fila["rendimiento_pct"])
-                        cantidad += 1
-                    except Exception:
-                        continue
+# ✅ Hilo para enviar resumen diario a las 23:59 UTC
+def run_resumen_diario():
+    schedule.every().day.at("23:59").do(enviar_resumen_diario, symbols=SYMBOLS)
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
 
-        if cantidad > 0:
-            promedio_rend = rendimiento_total / cantidad
-            resumen += f"{symbol}: {ganancia_total:.2f} USDT ({promedio_rend:.2f}%)\n"
-            total_usdt += ganancia_total
+if __name__ == "__main__":
+    configurar_logger()
+    
+    # 🔄 Iniciar hilo por cada símbolo
+    for sym in SYMBOLS:
+        t = threading.Thread(target=run_bot, args=(sym,), daemon=True)
+        t.start()
 
-    resumen += "\nTOTAL: {:.2f} USDT".format(total_usdt)
-    enviar_mensaje(resumen)
+    # 🔁 Iniciar hilo para resumen diario
+    threading.Thread(target=run_resumen_diario, daemon=True).start()
+
+    # 🌐 Ejecutar servidor Flask
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
