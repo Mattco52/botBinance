@@ -19,12 +19,15 @@ def enviar_resumen_diario(symbols):
         with open(path, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                timestamp = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S")
-                hoy = datetime.utcnow().date()
-                if timestamp.date() == hoy:
-                    ganancia_total += float(row["ganancia"])
-                    rendimiento_total += float(row["rendimiento_pct"])
-                    operaciones += 1
+                try:
+                    timestamp = datetime.strptime(row["timestamp"], "%Y-%m-%d %H:%M:%S")
+                    hoy = datetime.utcnow().date()
+                    if timestamp.date() == hoy:
+                        ganancia_total += float(row["ganancia"])
+                        rendimiento_total += float(row["rendimiento_pct"])
+                        operaciones += 1
+                except:
+                    continue
 
         if operaciones > 0:
             prom_rendimiento = rendimiento_total / operaciones
