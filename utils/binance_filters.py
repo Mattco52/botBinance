@@ -9,7 +9,6 @@ def calcular_cantidad_valida(symbol, precio_actual):
         info = client.get_symbol_info(symbol)
         min_notional = None
         step_size = 0.000001  # valor por defecto
-        min_qty = 0.000001  # valor por defecto
 
         for f in info["filters"]:
             if f["filterType"] in ["MIN_NOTIONAL", "NOTIONAL"]:
@@ -19,34 +18,25 @@ def calcular_cantidad_valida(symbol, precio_actual):
                     min_notional = float(f["notional"])
             if f["filterType"] == "LOT_SIZE":
                 step_size = float(f["stepSize"])
-                min_qty = float(f["minQty"])
 
-        # Fallback manual si no se encuentra el filtro
+        # 🚨 Fallback manual para BTC si no se encuentra el filtro
+        if symbol == "BTCUSDT" and not min_notional:
+            min_notional = 10.0  # forzamos un mínimo de $10
+
         if not min_notional:
-            min_notional = 10.0  # mínimo de $10 por seguridad
+            logging.warning(f"[{symbol}] No se encontró filtro de notional.")
+            return None
 
-        # Forzar mínimo absoluto para BTC y monedas caras
-        if symbol in ["BTCUSDT", "ETHUSDT", "BNBUSDT"]:
-            min_notional = max(min_notional, 11.0)
-
-        # Calcular cantidad base
+        # Calcular cantidad con factor
         cantidad = (min_notional / precio_actual) * PARAMS.get("quantity_factor", 1.0)
 
         # Redondear a múltiplo de step_size
         precision = len(str(step_size).split(".")[1])
         cantidad = round(cantidad, precision)
 
-        # Validar que supere los mínimos
-        if cantidad < min_qty:
-            cantidad = min_qty
-
         total = round(cantidad * precio_actual, 2)
-
-        if total < min_notional:
-            logging.warning(f"[{symbol}] Monto total insuficiente: {total} USDT (mínimo {min_notional})")
-            return None
-
         logging.info(f"[{symbol}] Cantidad calculada: {cantidad} | Valor estimado: {total} USDT")
+
         return cantidad
 
     except Exception as e:
