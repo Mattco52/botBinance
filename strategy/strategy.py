@@ -58,34 +58,41 @@ def ejecutar_estrategia(symbol):
         comprar(precio_actual, rsi, symbol, estado)
 
     elif estado["estado"] and estado["cantidad_acumulada"] > 0:
-        ganancia = round((precio_actual - estado["precio_entrada_promedio"]) * estado["cantidad_acumulada"], 2)
-        if rsi > PARAMS['rsi_sell_threshold'] and ganancia >= 0.2:
-            vender(precio_actual, rsi, symbol, estado, "RSI sobre umbral con ganancia")
-        elif rsi < 60 and rsi_prev > 60 and ganancia >= 0.2:
-            vender(precio_actual, rsi, symbol, estado, "RSI perdió momentum con ganancia")
-
-    if estado["estado"] and not PARAMS['use_oco']:
         entrada = estado["precio_entrada_promedio"]
         cantidad = estado["cantidad_acumulada"]
+        ganancia = round((precio_actual - entrada) * cantidad, 2)
+        rendimiento_pct = (ganancia / (entrada * cantidad)) * 100
 
-        tp = entrada * (1 + PARAMS['take_profit'] / 100)
+        if ganancia >= 0.5 and rendimiento_pct >= 0.5:
+            if rsi > PARAMS['rsi_sell_threshold']:
+                vender(precio_actual, rsi, symbol, estado, "RSI alto con buena ganancia")
+            elif rsi < 60 and rsi_prev > 60:
+                vender(precio_actual, rsi, symbol, estado, "RSI bajando con buena ganancia")
 
-        if PARAMS.get('use_trailing_stop', False):
-            if precio_actual > estado["precio_maximo"]:
-                estado["precio_maximo"] = precio_actual
-
-            trailing_stop = estado["precio_maximo"] * (1 - PARAMS['trailing_stop_pct'] / 100)
-
-            if precio_actual <= trailing_stop:
-                vender(precio_actual, rsi, symbol, estado, "Trailing Stop alcanzado")
-
-        else:
+        if not PARAMS['use_oco']:
+            tp = entrada * (1 + PARAMS['take_profit'] / 100)
             sl = entrada * (1 - PARAMS['stop_loss'] / 100)
-            if precio_actual <= sl:
-                vender(precio_actual, rsi, symbol, estado, "Stop Loss alcanzado")
 
-        if precio_actual >= tp:
-            vender(precio_actual, rsi, symbol, estado, "Take Profit alcanzado")
+            if PARAMS.get('use_trailing_stop', False):
+                if precio_actual > estado["precio_maximo"]:
+                    estado["precio_maximo"] = precio_actual
+
+                trailing_stop = estado["precio_maximo"] * (1 - PARAMS['trailing_stop_pct'] / 100)
+
+                if precio_actual <= trailing_stop:
+                    if ganancia >= 0.5:
+                        vender(precio_actual, rsi, symbol, estado, "Trailing Stop alcanzado")
+                    else:
+                        logging.info(f"[{symbol}] ⚠️ Trailing ignorado. Ganancia insuficiente: {ganancia:.2f} USDT")
+            else:
+                if precio_actual <= sl:
+                    if rendimiento_pct <= -0.5:
+                        vender(precio_actual, rsi, symbol, estado, "Stop Loss alcanzado con pérdida controlada")
+                    else:
+                        logging.info(f"[{symbol}] ⚠️ Stop Loss ignorado. Pérdida aún tolerable")
+
+            if precio_actual >= tp and ganancia >= 0.5:
+                vender(precio_actual, rsi, symbol, estado, "Take Profit alcanzado")
 
     else:
         logging.info(f"[{ahora}] [{symbol}] ⚪ Sin señal clara | EMA OK: {ema_ok} | RSI: {rsi:.2f}")
