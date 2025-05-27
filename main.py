@@ -24,7 +24,7 @@ def run_bot(symbol):
 
 # ✅ Hilo para enviar resumen diario a las 23:59 UTC
 def run_resumen_diario():
-    schedule.every().day.at("23:59").do(enviar_resumen_diario, symbols=SYMBOLS)
+    schedule.every().day.at("02:00").do(enviar_resumen_diario, symbols=SYMBOLS)
     while True:
         schedule.run_pending()
         time.sleep(60)
