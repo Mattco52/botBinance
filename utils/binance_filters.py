@@ -8,7 +8,8 @@ def calcular_cantidad_valida(symbol, precio_actual):
     try:
         info = client.get_symbol_info(symbol)
         min_notional = None
-        step_size = 0.000001  # valor por defecto
+        step_size = 0.000001  # por defecto
+        min_qty = 0.000001    # por defecto
 
         for f in info["filters"]:
             if f["filterType"] in ["MIN_NOTIONAL", "NOTIONAL"]:
@@ -18,25 +19,34 @@ def calcular_cantidad_valida(symbol, precio_actual):
                     min_notional = float(f["notional"])
             if f["filterType"] == "LOT_SIZE":
                 step_size = float(f["stepSize"])
+                min_qty = float(f["minQty"])
 
-        # 🚨 Fallback manual para BTC si no se encuentra el filtro
+        # Fallback manual si no hay minNotional
         if symbol == "BTCUSDT" and not min_notional:
-            min_notional = 10.0  # forzamos un mínimo de $10
+            min_notional = 10.0  # seguridad para BTC
 
         if not min_notional:
             logging.warning(f"[{symbol}] No se encontró filtro de notional.")
             return None
 
-        # Calcular cantidad con factor
+        # Calcular cantidad con factor (PARAMS['quantity_factor'])
         cantidad = (min_notional / precio_actual) * PARAMS.get("quantity_factor", 1.0)
 
-        # Redondear a múltiplo de step_size
+        # Redondear al step_size
         precision = len(str(step_size).split(".")[1])
         cantidad = round(cantidad, precision)
 
-        total = round(cantidad * precio_actual, 2)
-        logging.info(f"[{symbol}] Cantidad calculada: {cantidad} | Valor estimado: {total} USDT")
+        # Verificar contra minQty
+        if cantidad < min_qty:
+            cantidad = min_qty
 
+        # Verificar si el total cumple minNotional
+        total = round(cantidad * precio_actual, 2)
+        if total < min_notional:
+            logging.warning(f"[{symbol}] Total insuficiente: {total} < mínimo {min_notional}")
+            return None
+
+        logging.info(f"[{symbol}] Cantidad calculada: {cantidad} | Total: {total} USDT")
         return cantidad
 
     except Exception as e:
