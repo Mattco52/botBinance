@@ -5,7 +5,6 @@ from execution.state_manager import cargar_estado, guardar_estado
 import logging
 from datetime import datetime, timedelta
 
-# Almacena el RSI anterior por símbolo
 rsi_anterior_dict = {}
 
 def ejecutar_estrategia(symbol):
@@ -26,12 +25,7 @@ def ejecutar_estrategia(symbol):
     ema_ok = fila_act['ema9'] > fila_act['ema21']
     rsi = fila_act['rsi']
     rsi_prev = fila_ant['rsi']
-
-    timestamp_raw = fila_act.name if hasattr(fila_act, 'name') else None
-    if isinstance(timestamp_raw, int):
-        vela_timestamp = datetime.utcfromtimestamp(timestamp_raw / 1000)
-    else:
-        vela_timestamp = timestamp_raw or datetime.utcnow()
+    vela_timestamp = fila_act.name or datetime.utcnow()
     vela_actual_str = vela_timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
     ultima_compra = estado.get("ultima_compra_timestamp")
@@ -54,8 +48,14 @@ def ejecutar_estrategia(symbol):
         and (not cooldown_termina or ahora_dt >= cooldown_termina)
     )
 
+    logging.info(f"[{symbol}] Evaluación compra | EMA OK: {ema_ok} | RSI: {rsi:.2f} | Estado: {estado['estado']}")
+
     if puede_comprar:
-        comprar(precio_actual, rsi, symbol, estado)
+        exito = comprar(precio_actual, rsi, symbol, estado)
+        if not exito:
+            logging.warning(f"[{symbol}] Compra no ejecutada. Puede que la cantidad sea inválida.")
+    else:
+        logging.info(f"[{symbol}] ❌ Compra no permitida ahora (condiciones no cumplidas).")
 
     elif estado["estado"] and estado["cantidad_acumulada"] > 0:
         entrada = estado["precio_entrada_promedio"]
@@ -63,8 +63,7 @@ def ejecutar_estrategia(symbol):
         ganancia = round((precio_actual - entrada) * cantidad, 2)
         rendimiento_pct = (ganancia / (entrada * cantidad)) * 100
 
-        # Ganancia mínima más flexible
-        if ganancia >= 0.1 and rendimiento_pct >= 0.2:
+        if ganancia >= 0.1 or rendimiento_pct >= 0.2:
             if rsi > PARAMS['rsi_sell_threshold']:
                 vender(precio_actual, rsi, symbol, estado, "RSI alto con ganancia aceptable")
             elif rsi < 60 and rsi_prev > 60:
