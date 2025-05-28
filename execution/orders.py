@@ -19,7 +19,7 @@ def comprar(precio_actual, rsi, symbol, estado):
     if cantidad_calculada is None:
         enviar_mensaje(f"❌ [{symbol}] No se pudo calcular una cantidad válida para la orden.")
         logging.warning(f"[{symbol}] Cancelando compra: cantidad inválida.")
-        return False  # ⛔ Cancelada por cantidad inválida
+        return False
 
     try:
         order = client.create_order(
@@ -62,12 +62,13 @@ def comprar(precio_actual, rsi, symbol, estado):
             enviar_mensaje(f"🔷 [{symbol}] OCO configurado\nTP: {tp} | SL: {sl}")
 
         guardar_estado(symbol, estado)
-        return True  # ✅ Compra exitosa
+        return True
 
     except Exception as e:
         logging.error(f"[{symbol}] Error al comprar: {e}")
         enviar_mensaje(f"❌ [{symbol}] Error al COMPRAR:\n{str(e)}")
-        return False  # ⛔ Error al ejecutar compra
+        return False
+
 
 def vender(precio_actual, rsi, symbol, estado, razon="Salida"):
     ahora = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
@@ -115,6 +116,7 @@ def vender(precio_actual, rsi, symbol, estado, razon="Salida"):
     except Exception as e:
         logging.error(f"[{symbol}] Error al vender: {e}")
         enviar_mensaje(f"❌ [{symbol}] Error al VENDER:\n{str(e)}")
+
 
 def verificar_cierre_oco(symbol, estado):
     if not estado["estado"] or not estado["oco_order_ids"]:
