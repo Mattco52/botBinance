@@ -1,18 +1,17 @@
 import os
 import csv
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict
 from notifier.telegram import enviar_mensaje
 
 LOG_FILE = "logs/operaciones.csv"
 
-def generar_resumen_diario():
+def enviar_resumen_diario():
     if not os.path.exists(LOG_FILE):
         enviar_mensaje("📊 Resumen Diario: No hubo operaciones hoy.")
         return
 
     resumen = defaultdict(lambda: {"ganancia": 0.0, "operaciones": 0})
-
     hoy = datetime.utcnow().date()
     operaciones_hoy = False
 
