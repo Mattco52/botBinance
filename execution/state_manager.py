@@ -1,7 +1,7 @@
-import json
 import os
+import json
 
-BASE_STATE_FILE = "bot_state_{}.json"
+STATE_DIR = "state"
 
 default_state = {
     "estado": False,
@@ -14,34 +14,31 @@ default_state = {
     "precio_maximo": 0.0
 }
 
-def get_state_file(symbol):
-    return BASE_STATE_FILE.format(symbol.upper())
+def ruta_estado(symbol):
+    if not os.path.exists(STATE_DIR):
+        os.makedirs(STATE_DIR)
+    return os.path.join(STATE_DIR, f"{symbol}_estado.json")
 
 def cargar_estado(symbol):
-    path = get_state_file(symbol)
+    path = ruta_estado(symbol)
     if not os.path.exists(path):
         guardar_estado(symbol, default_state.copy())
         return default_state.copy()
-
     try:
         with open(path, "r") as f:
-            data = json.load(f)
-
-        # Asegurar que todas las claves estén presentes
+            estado = json.load(f)
         for key in default_state:
-            if key not in data:
-                data[key] = default_state[key]
-
-        return data
-
+            if key not in estado:
+                estado[key] = default_state[key]
+        return estado
     except Exception as e:
-        print(f"Error al cargar estado para {symbol}: {e}")
+        print(f"[ERROR] No se pudo cargar el estado de {symbol}: {e}")
         return default_state.copy()
 
-def guardar_estado(symbol, state):
-    path = get_state_file(symbol)
+def guardar_estado(symbol, estado):
+    path = ruta_estado(symbol)
     try:
         with open(path, "w") as f:
-            json.dump(state, f, indent=2)
+            json.dump(estado, f, indent=4)
     except Exception as e:
-        print(f"Error al guardar estado para {symbol}: {e}")
+        print(f"[ERROR] No se pudo guardar el estado de {symbol}: {e}")
