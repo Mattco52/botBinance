@@ -11,7 +11,7 @@ PARAMS = {
     'ema_long': 21,
     'rsi_window': 14,
     'rsi_buy_threshold': 45,       # Si RSI < 45, comprar
-    'rsi_sell_threshold': 65,      # Si RSI > 65, considerar vender
+    'rsi_sell_threshold': 55,      # Si RSI > 65, considerar vender
 
     # Gestión de riesgo
     'take_profit': 1.0,            # 1% de ganancia para Take Profit
