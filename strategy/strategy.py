@@ -54,9 +54,6 @@ def ejecutar_estrategia(symbol):
         exito = comprar(precio_actual, rsi, symbol, estado)
         if not exito:
             logging.warning(f"[{symbol}] Compra no ejecutada. Puede que la cantidad sea inválida.")
-    else:
-        logging.info(f"[{symbol}] ❌ Compra no permitida ahora (condiciones no cumplidas).")
-
     elif estado["estado"] and estado["cantidad_acumulada"] > 0:
         entrada = estado["precio_entrada_promedio"]
         cantidad = estado["cantidad_acumulada"]
@@ -93,7 +90,6 @@ def ejecutar_estrategia(symbol):
 
             if precio_actual >= tp:
                 vender(precio_actual, rsi, symbol, estado, "Take Profit alcanzado")
-
     else:
         logging.info(f"[{ahora}] [{symbol}] ⚪ Sin señal clara | EMA OK: {ema_ok} | RSI: {rsi:.2f}")
 
