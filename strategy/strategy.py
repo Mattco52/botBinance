@@ -5,84 +5,80 @@ from execution.state_manager import cargar_estado
 import logging
 from datetime import datetime
 
-# Memoria temporal para RSI anterior por símbolo
-rsi_anterior = {}
-
+# Ejecutado por cada símbolo individualmente
 def ejecutar_estrategia(symbol):
-    global rsi_anterior
-
     ahora = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     logging.info(f"[{ahora}] [{symbol}] Ejecutando estrategia...")
 
+    # Cargar estado actual
     estado = cargar_estado(symbol)
 
+    # Verificar si órdenes OCO ya se cerraron
     verificar_cierre_oco(symbol, estado)
 
+    # Obtener datos de mercado e indicadores
     precio_actual = obtener_precio_actual(symbol)
     fila_ant, fila_act = obtener_datos(symbol)
+
     if fila_act is None:
-        logging.error(f"[{ahora}] [{symbol}] No se pudieron obtener los indicadores.")
+        logging.warning(f"[{symbol}] ❌ No se pudo obtener fila de indicadores.")
         return
 
     ema_ok = fila_act['ema9'] > fila_act['ema21']
     rsi = fila_act['rsi']
     rsi_prev = fila_ant['rsi']
 
-    # Timestamp de la vela actual
+    # Timestamp para comparar con última compra
     timestamp_raw = fila_act.name if hasattr(fila_act, 'name') else None
-    if isinstance(timestamp_raw, int):
-        vela_timestamp = datetime.utcfromtimestamp(timestamp_raw / 1000)
-    else:
-        vela_timestamp = timestamp_raw or datetime.utcnow()
-    vela_actual_str = vela_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+    vela_ts = datetime.utcfromtimestamp(timestamp_raw / 1000) if isinstance(timestamp_raw, int) else timestamp_raw or datetime.utcnow()
+    vela_str = vela_ts.strftime('%Y-%m-%d %H:%M:%S')
 
     ultima_compra = estado.get("ultima_compra_timestamp")
 
     puede_comprar = (
-        not estado["estado"]
-        and ema_ok
-        and rsi < PARAMS['rsi_buy_threshold']
-        and (not ultima_compra or ultima_compra < vela_actual_str)
+        not estado["estado"] and ema_ok and rsi < PARAMS["rsi_buy_threshold"]
+        and (not ultima_compra or ultima_compra < vela_str)
     )
 
     if puede_comprar:
         comprar(precio_actual, rsi, symbol, estado)
+        return  # Ya compró, esperar próximo ciclo
 
-    elif estado["estado"] and estado["cantidad_acumulada"] > 0:
+    # Verificación de venta solo si hay posición activa
+    if estado["estado"] and estado["cantidad_acumulada"] > 0:
         entrada = estado["precio_entrada_promedio"]
-        ganancia_pct = ((precio_actual - entrada) / entrada) * 100
+        cantidad = estado["cantidad_acumulada"]
+        tp = entrada * (1 + PARAMS["take_profit"] / 100)
+        sl = entrada * (1 - PARAMS["stop_loss"] / 100)
 
-        if rsi > PARAMS['rsi_sell_threshold'] or ganancia_pct >= 0.3:
-            vender(precio_actual, rsi, symbol, estado, "Condiciones de venta cumplidas")
+        # ✅ Condiciones de venta
+        if rsi > PARAMS["rsi_sell_threshold"]:
+            vender(precio_actual, rsi, symbol, estado, "RSI sobre umbral de venta")
+            return
 
-        elif rsi < 60 and rsi_prev > 60:
+        if rsi < 60 and rsi_prev > 60:
             vender(precio_actual, rsi, symbol, estado, "RSI perdió momentum")
+            return
 
-        # Take profit y trailing stop solo si no se está usando OCO
-        if not PARAMS['use_oco']:
-            tp = entrada * (1 + PARAMS['take_profit'] / 100)
-
-            if PARAMS['use_trailing_stop']:
+        # ✅ Simulación de lógica TP/SL/Trailing (si no se usa OCO)
+        if not PARAMS["use_oco"]:
+            if PARAMS["use_trailing_stop"]:
                 if precio_actual > estado["precio_maximo"]:
                     estado["precio_maximo"] = precio_actual
 
-                trailing_stop = estado["precio_maximo"] * (1 - PARAMS['trailing_stop_pct'] / 100)
+                trailing_stop = estado["precio_maximo"] * (1 - PARAMS["trailing_stop_pct"] / 100)
 
                 if precio_actual <= trailing_stop:
                     vender(precio_actual, rsi, symbol, estado, "Trailing Stop alcanzado")
+                    return
             else:
-                sl = entrada * (1 - PARAMS['stop_loss'] / 100)
                 if precio_actual <= sl:
                     vender(precio_actual, rsi, symbol, estado, "Stop Loss alcanzado")
+                    return
 
             if precio_actual >= tp:
                 vender(precio_actual, rsi, symbol, estado, "Take Profit alcanzado")
-
-    elif estado["estado"]:
-        logging.info(f"[{ahora}] [{symbol}] Posición abierta sin condiciones de venta | RSI: {rsi:.2f}")
+                return
 
     else:
-        logging.info(f"[{ahora}] [{symbol}] ⚪ Sin señal clara | EMA9 > EMA21: {ema_ok} | RSI: {rsi:.2f}")
-
-    # Guardar el RSI anterior por símbolo
-    rsi_anterior[symbol] = rsi
+        logging.info(f"[{symbol}] ⚪ Sin señal clara | EMA9 > EMA21: {ema_ok} | RSI: {rsi:.2f}")
