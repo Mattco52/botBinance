@@ -3,7 +3,7 @@ from config.settings import PARAMS, API_KEY, SECRET_KEY, TESTNET
 from notifier.telegram import enviar_mensaje
 from execution.state_manager import guardar_estado
 from logger.logs import log_operacion
-from utils.binance_filters import calcular_cantidad_valida
+from utils.binance_filters import cumple_min_notional
 from datetime import datetime
 import logging
 
@@ -14,26 +14,25 @@ def comprar(precio_actual, rsi, symbol, estado):
     logging.info(f"[{ahora}] [{symbol}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje(f"🟢 [{symbol}] Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
-    cantidad_calculada = calcular_cantidad_valida(symbol, precio_actual)
-
-    if cantidad_calculada is None:
-        enviar_mensaje(f"❌ [{symbol}] No se pudo calcular una cantidad válida para la orden.")
-        logging.warning(f"[{symbol}] Cancelando compra: cantidad inválida.")
-        return False
+    # ✅ Validar mínimo NOTIONAL
+    if not cumple_min_notional(symbol, precio_actual, PARAMS["quantity"]):
+        enviar_mensaje(f"⚠️ [{symbol}] Orden cancelada: No cumple el mínimo NOTIONAL.")
+        logging.warning(f"[{symbol}] Orden cancelada: Valor = {precio_actual * PARAMS['quantity']:.2f} < mínimo permitido.")
+        return
 
     try:
         order = client.create_order(
             symbol=symbol,
             side=Client.SIDE_BUY,
             type=Client.ORDER_TYPE_MARKET,
-            quantity=cantidad_calculada
+            quantity=PARAMS['quantity']
         )
 
         estado["order_id"] = order['orderId']
         estado["estado"] = True
-        estado["cantidad_acumulada"] += cantidad_calculada
+        estado["cantidad_acumulada"] += PARAMS['quantity']
 
-        qty = cantidad_calculada
+        qty = PARAMS['quantity']
         old_qty = estado["cantidad_acumulada"] - qty
         old_avg = estado["precio_entrada_promedio"]
         estado["precio_entrada_promedio"] = (
@@ -62,13 +61,10 @@ def comprar(precio_actual, rsi, symbol, estado):
             enviar_mensaje(f"🔷 [{symbol}] OCO configurado\nTP: {tp} | SL: {sl}")
 
         guardar_estado(symbol, estado)
-        return True
 
     except Exception as e:
         logging.error(f"[{symbol}] Error al comprar: {e}")
         enviar_mensaje(f"❌ [{symbol}] Error al COMPRAR:\n{str(e)}")
-        return False
-
 
 def vender(precio_actual, rsi, symbol, estado, razon="Salida"):
     ahora = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
@@ -116,7 +112,6 @@ def vender(precio_actual, rsi, symbol, estado, razon="Salida"):
     except Exception as e:
         logging.error(f"[{symbol}] Error al vender: {e}")
         enviar_mensaje(f"❌ [{symbol}] Error al VENDER:\n{str(e)}")
-
 
 def verificar_cierre_oco(symbol, estado):
     if not estado["estado"] or not estado["oco_order_ids"]:
