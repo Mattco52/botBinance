@@ -3,7 +3,7 @@ from config.settings import PARAMS, API_KEY, SECRET_KEY, TESTNET
 from notifier.telegram import enviar_mensaje
 from execution.state_manager import guardar_estado
 from logger.logs import log_operacion
-from utils.binance_filters import calcular_cantidad_valida  # ✅ NUEVO
+from utils.binance_filters import calcular_cantidad_valida
 from datetime import datetime
 import logging
 
@@ -14,13 +14,12 @@ def comprar(precio_actual, rsi, symbol, estado):
     logging.info(f"[{ahora}] [{symbol}] 🟢 Ejecutando COMPRA | Precio: {precio_actual:.2f} | RSI: {rsi:.2f}")
     enviar_mensaje(f"🟢 [{symbol}] Señal de COMPRA\nPrecio: {precio_actual:.2f}\nRSI: {rsi:.2f}")
 
-    # ✅ Calcular cantidad válida automáticamente
     cantidad_calculada = calcular_cantidad_valida(symbol, precio_actual)
 
     if cantidad_calculada is None:
         enviar_mensaje(f"❌ [{symbol}] No se pudo calcular una cantidad válida para la orden.")
         logging.warning(f"[{symbol}] Cancelando compra: cantidad inválida.")
-        return
+        return False  # ⛔ Cancelada por cantidad inválida
 
     try:
         order = client.create_order(
@@ -63,10 +62,12 @@ def comprar(precio_actual, rsi, symbol, estado):
             enviar_mensaje(f"🔷 [{symbol}] OCO configurado\nTP: {tp} | SL: {sl}")
 
         guardar_estado(symbol, estado)
+        return True  # ✅ Compra exitosa
 
     except Exception as e:
         logging.error(f"[{symbol}] Error al comprar: {e}")
         enviar_mensaje(f"❌ [{symbol}] Error al COMPRAR:\n{str(e)}")
+        return False  # ⛔ Error al ejecutar compra
 
 def vender(precio_actual, rsi, symbol, estado, razon="Salida"):
     ahora = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
