@@ -21,7 +21,7 @@ PARAMS = {
     'quantity': 0.001,
 
     # Factor para cálculo automático basado en minNotional
-    'quantity_factor': 1.2,        # 20% por encima del mínimo requerido
+    'quantity_factor': 1.5,        # 20% por encima del mínimo requerido
 
     # Tiempo entre ciclos de estrategia
     'sleep_time': 30,
