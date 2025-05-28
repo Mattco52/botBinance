@@ -1,39 +1,29 @@
-import os
 import csv
+import os
 from datetime import datetime
-import logging
 
-def log_operacion(symbol, precio, ganancia, rendimiento, razon):
-    try:
-        # Crear carpeta logs si no existe
-        os.makedirs("logs", exist_ok=True)
+LOG_DIR = "logs"
 
-        # Ruta del archivo CSV
-        archivo = f"logs/operaciones_{symbol.upper()}.csv"
+def log_operacion(symbol, precio_venta, ganancia, rendimiento, razon):
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
 
-        # Fila a registrar
-        nueva_fila = [
-            datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-            round(precio, 2),
-            round(ganancia, 2),
-            round(rendimiento, 2),
-            razon
-        ]
+    fecha = datetime.utcnow().strftime('%Y-%m-%d')
+    archivo = os.path.join(LOG_DIR, f"{fecha}.csv")
 
-        # Encabezados
-        encabezado = ["timestamp", "precio", "ganancia", "rendimiento_pct", "razon"]
+    nueva_fila = {
+        "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+        "symbol": symbol,
+        "precio_venta": precio_venta,
+        "ganancia": ganancia,
+        "rendimiento_%": rendimiento,
+        "motivo": razon
+    }
 
-        # Verificar si el archivo ya existe
-        archivo_existe = os.path.exists(archivo)
+    escribir_cabecera = not os.path.exists(archivo)
 
-        # Escribir en el archivo
-        with open(archivo, mode="a", newline="") as f:
-            writer = csv.writer(f)
-            if not archivo_existe:
-                writer.writerow(encabezado)
-            writer.writerow(nueva_fila)
-
-        logging.info(f"[{symbol}] Log guardado: {nueva_fila}")
-
-    except Exception as e:
-        logging.error(f"[{symbol}] Error al guardar log: {e}")
+    with open(archivo, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=nueva_fila.keys())
+        if escribir_cabecera:
+            writer.writeheader()
+        writer.writerow(nueva_fila)
