@@ -63,11 +63,12 @@ def ejecutar_estrategia(symbol):
         ganancia = round((precio_actual - entrada) * cantidad, 2)
         rendimiento_pct = (ganancia / (entrada * cantidad)) * 100
 
-        if ganancia >= 0.5 and rendimiento_pct >= 0.5:
+        # Ganancia mínima más flexible
+        if ganancia >= 0.1 and rendimiento_pct >= 0.2:
             if rsi > PARAMS['rsi_sell_threshold']:
-                vender(precio_actual, rsi, symbol, estado, "RSI alto con buena ganancia")
+                vender(precio_actual, rsi, symbol, estado, "RSI alto con ganancia aceptable")
             elif rsi < 60 and rsi_prev > 60:
-                vender(precio_actual, rsi, symbol, estado, "RSI bajando con buena ganancia")
+                vender(precio_actual, rsi, symbol, estado, "RSI bajando con ganancia aceptable")
 
         if not PARAMS['use_oco']:
             tp = entrada * (1 + PARAMS['take_profit'] / 100)
@@ -80,18 +81,18 @@ def ejecutar_estrategia(symbol):
                 trailing_stop = estado["precio_maximo"] * (1 - PARAMS['trailing_stop_pct'] / 100)
 
                 if precio_actual <= trailing_stop:
-                    if ganancia >= 0.5:
-                        vender(precio_actual, rsi, symbol, estado, "Trailing Stop alcanzado")
+                    if ganancia >= 0.1:
+                        vender(precio_actual, rsi, symbol, estado, "Trailing Stop alcanzado con ganancia razonable")
                     else:
-                        logging.info(f"[{symbol}] ⚠️ Trailing ignorado. Ganancia insuficiente: {ganancia:.2f} USDT")
+                        vender(precio_actual, rsi, symbol, estado, "Trailing Stop forzado con baja ganancia")
             else:
                 if precio_actual <= sl:
                     if rendimiento_pct <= -0.5:
-                        vender(precio_actual, rsi, symbol, estado, "Stop Loss alcanzado con pérdida controlada")
+                        vender(precio_actual, rsi, symbol, estado, "Stop Loss alcanzado")
                     else:
                         logging.info(f"[{symbol}] ⚠️ Stop Loss ignorado. Pérdida aún tolerable")
 
-            if precio_actual >= tp and ganancia >= 0.5:
+            if precio_actual >= tp:
                 vender(precio_actual, rsi, symbol, estado, "Take Profit alcanzado")
 
     else:
