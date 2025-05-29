@@ -1,85 +1,71 @@
-from config.settings import PARAMS
-from data.market_data import obtener_datos, obtener_precio_actual
-from execution.orders import comprar, vender, verificar_cierre_oco
-from execution.state_manager import cargar_estado
-from utils.binance_quantity import calcular_cantidad_valida
 import logging
-from datetime import datetime
+from binance.client import Client
+from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
+from utils.indicators import calcular_ema, calcular_rsi
+from utils.data_fetcher import obtener_datos
+from utils.binance_filters import calcular_cantidad_valida, cumple_min_notional
+from notifier.telegram import enviar_mensaje
+from execution.operations import comprar, vender, verificar_cierre_oco
+from execution.state_manager import cargar_estado
+
+client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
 def ejecutar_estrategia(symbol):
-    ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    logging.info(f"[{ahora}] [{symbol}] Ejecutando estrategia...")
+    ahora = Client().get_server_time()
+    logging.info(f"[{symbol}] Ejecutando estrategia...")
 
+    # ✅ Cargar estado actual
     estado = cargar_estado(symbol)
-    verificar_cierre_oco(symbol, estado)
 
-    # Obtener datos de mercado e indicadores
-    precio_actual = obtener_precio_actual(symbol)
-    fila_ant, fila_act = obtener_datos(symbol)
+    # ✅ Verificar si alguna orden OCO fue cerrada
+    if PARAMS['use_oco']:
+        verificar_cierre_oco(symbol, estado)
 
-    if fila_act is None or precio_actual is None:
-        logging.warning(f"[{symbol}] No se obtuvieron datos de mercado o indicadores.")
-        return
-
-    ema_ok = fila_act['ema9'] > fila_act['ema21']
-    rsi = fila_act['rsi']
-    rsi_prev = fila_ant['rsi']
-
-    # Timestamp de la vela
-    timestamp_raw = fila_act.name if hasattr(fila_act, 'name') else None
-    if isinstance(timestamp_raw, int):
-        vela_timestamp = datetime.utcfromtimestamp(timestamp_raw / 1000)
-    else:
-        vela_timestamp = timestamp_raw or datetime.utcnow()
-    vela_actual_str = vela_timestamp.strftime("%Y-%m-%d %H:%M:%S")
-
-    ultima_compra = estado.get("ultima_compra_timestamp")
-
-    puede_comprar = (
-        not estado["estado"]
-        and ema_ok
-        and rsi < PARAMS['rsi_buy_threshold']
-        and (not ultima_compra or ultima_compra < vela_actual_str)
-    )
-
-    if puede_comprar:
-        cantidad = calcular_cantidad_valida(symbol, precio_actual)
-        if cantidad:
-            PARAMS['quantity'] = cantidad  # actualizar cantidad dinámica
-            comprar(precio_actual, rsi, symbol, estado)
-        else:
-            logging.warning(f"[{symbol}] ❌ No se pudo calcular una cantidad válida para la orden.")
+    try:
+        df = obtener_datos(symbol, PARAMS["timeframe"])
+        if df is None or df.empty:
+            logging.warning(f"[{symbol}] No se pudieron obtener datos.")
             return
 
-    elif estado["estado"] and estado["cantidad_acumulada"] > 0:
-        # VENTA por RSI
-        if rsi > PARAMS['rsi_sell_threshold']:
-            vender(precio_actual, rsi, symbol, estado, "RSI sobre umbral de venta")
-        elif rsi < 60 and rsi_prev > 60:
-            vender(precio_actual, rsi, symbol, estado, "RSI perdió momentum")
+        ema_corta = calcular_ema(df["close"], PARAMS["ema_short"])
+        ema_larga = calcular_ema(df["close"], PARAMS["ema_long"])
+        rsi = calcular_rsi(df["close"], PARAMS["rsi_window"])
 
-        # Simulación de Take Profit / Trailing Stop
-        if not PARAMS['use_oco']:
-            entrada = estado["precio_entrada_promedio"]
-            cantidad = estado["cantidad_acumulada"]
+        precio_actual = float(df["close"].iloc[-1])
+        ema_ok = ema_corta.iloc[-1] > ema_larga.iloc[-1]
+        rsi_actual = rsi.iloc[-1]
 
-            tp = entrada * (1 + PARAMS['take_profit'] / 100)
-            sl = entrada * (1 - PARAMS['stop_loss'] / 100)
+        logging.info(f"[{symbol}] ⚪ Sin señal clara | EMA OK: {ema_ok} | RSI: {rsi_actual:.2f}")
 
-            if PARAMS['use_trailing_stop']:
+        # ✅ Señal de compra
+        if not estado["estado"] and ema_ok and rsi_actual < PARAMS["rsi_buy_threshold"]:
+            cantidad = calcular_cantidad_valida(symbol, precio_actual)
+            if cantidad:
+                PARAMS["quantity"] = cantidad
+                comprar(precio_actual, rsi_actual, symbol, estado)
+            else:
+                enviar_mensaje(f"❌ [{symbol}] No se pudo calcular una cantidad válida para la orden.")
+
+        # ✅ Señal de venta
+        elif estado["estado"]:
+            razon = None
+            ganancia_pct = ((precio_actual - estado["precio_entrada_promedio"]) / estado["precio_entrada_promedio"]) * 100
+            if rsi_actual > PARAMS["rsi_sell_threshold"]:
+                razon = "RSI alto"
+            elif PARAMS["use_trailing_stop"]:
                 if precio_actual > estado["precio_maximo"]:
                     estado["precio_maximo"] = precio_actual
-
-                trailing_stop = estado["precio_maximo"] * (1 - PARAMS['trailing_stop_pct'] / 100)
-
-                if precio_actual <= trailing_stop:
-                    vender(precio_actual, rsi, symbol, estado, "Trailing Stop alcanzado")
+                limite_stop = estado["precio_maximo"] * (1 - PARAMS["trailing_stop_pct"] / 100)
+                if precio_actual < limite_stop:
+                    razon = "Trailing Stop alcanzado"
             else:
-                if precio_actual <= sl:
-                    vender(precio_actual, rsi, symbol, estado, "Stop Loss alcanzado")
+                if ganancia_pct >= PARAMS["take_profit"]:
+                    razon = "Take Profit alcanzado"
+                elif ganancia_pct <= -PARAMS["stop_loss"]:
+                    razon = "Stop Loss alcanzado"
 
-            if precio_actual >= tp:
-                vender(precio_actual, rsi, symbol, estado, "Take Profit alcanzado")
+            if razon:
+                vender(precio_actual, rsi_actual, symbol, estado, razon=razon)
 
-    else:
-        logging.info(f"[{ahora}] [{symbol}] ⚪ Sin señal clara | EMA OK: {ema_ok} | RSI: {rsi:.2f}")
+    except Exception as e:
+        logging.error(f"[{symbol}] Error en estrategia: {e}")
