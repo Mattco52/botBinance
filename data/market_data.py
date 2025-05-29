@@ -7,11 +7,11 @@ import logging
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
-def obtener_datos(symbol):
+def obtener_datos(symbol, timeframe):
     try:
         klines = client.get_historical_klines(
             symbol=symbol,
-            interval=PARAMS['timeframe'],
+            interval=timeframe,
             start_str="24 hours ago UTC"
         )
     except Exception as e:
@@ -33,7 +33,6 @@ def obtener_datos(symbol):
     df['ema21'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
     df['rsi'] = RSIIndicator(df['close'], window=PARAMS['rsi_window']).rsi()
 
-    # Asegurar que hay suficientes datos para operar
     if len(df) < 2:
         logging.warning(f"[{symbol}] No hay suficientes datos para operar.")
         return None, None
