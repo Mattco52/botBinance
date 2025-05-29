@@ -1,23 +1,19 @@
 import logging
 from binance.client import Client
 from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
-from utils.indicators import calcular_ema, calcular_rsi
-from utils.data_fetcher import obtener_datos
-from utils.binance_filters import calcular_cantidad_valida, cumple_min_notional
+from data.market_data import obtener_datos
+from utils.binance_filters import calcular_ema, calcular_rsi, calcular_cantidad_valida
 from notifier.telegram import enviar_mensaje
-from execution.operations import comprar, vender, verificar_cierre_oco
+from execution.orders import comprar, vender, verificar_cierre_oco
 from execution.state_manager import cargar_estado
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
 def ejecutar_estrategia(symbol):
-    ahora = Client().get_server_time()
     logging.info(f"[{symbol}] Ejecutando estrategia...")
 
-    # ✅ Cargar estado actual
     estado = cargar_estado(symbol)
 
-    # ✅ Verificar si alguna orden OCO fue cerrada
     if PARAMS['use_oco']:
         verificar_cierre_oco(symbol, estado)
 
@@ -37,7 +33,6 @@ def ejecutar_estrategia(symbol):
 
         logging.info(f"[{symbol}] ⚪ Sin señal clara | EMA OK: {ema_ok} | RSI: {rsi_actual:.2f}")
 
-        # ✅ Señal de compra
         if not estado["estado"] and ema_ok and rsi_actual < PARAMS["rsi_buy_threshold"]:
             cantidad = calcular_cantidad_valida(symbol, precio_actual)
             if cantidad:
@@ -46,7 +41,6 @@ def ejecutar_estrategia(symbol):
             else:
                 enviar_mensaje(f"❌ [{symbol}] No se pudo calcular una cantidad válida para la orden.")
 
-        # ✅ Señal de venta
         elif estado["estado"]:
             razon = None
             ganancia_pct = ((precio_actual - estado["precio_entrada_promedio"]) / estado["precio_entrada_promedio"]) * 100
