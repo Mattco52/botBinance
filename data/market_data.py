@@ -1,9 +1,9 @@
 import pandas as pd
+import logging
 from binance.client import Client
-from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator
-import logging
+from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
@@ -16,7 +16,7 @@ def obtener_datos(symbol, timeframe):
         )
     except Exception as e:
         logging.error(f"[{symbol}] Error al obtener klines: {e}")
-        return None, None
+        return None
 
     df = pd.DataFrame(klines, columns=[
         'timestamp', 'open', 'high', 'low', 'close', 'volume',
@@ -28,21 +28,13 @@ def obtener_datos(symbol, timeframe):
     df['high'] = pd.to_numeric(df['high'])
     df['low'] = pd.to_numeric(df['low'])
 
-    # Calcular indicadores técnicos
-    df['ema9'] = EMAIndicator(df['close'], window=PARAMS['ema_short']).ema_indicator()
-    df['ema21'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
+    # Calcular indicadores
+    df['ema_short'] = EMAIndicator(df['close'], window=PARAMS['ema_short']).ema_indicator()
+    df['ema_long'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
     df['rsi'] = RSIIndicator(df['close'], window=PARAMS['rsi_window']).rsi()
 
-    if len(df) < 2:
-        logging.warning(f"[{symbol}] No hay suficientes datos para operar.")
-        return None, None
+    if df.empty:
+        logging.warning(f"[{symbol}] No hay datos en el DataFrame.")
+        return None
 
-    return df.iloc[-2], df.iloc[-1]
-
-def obtener_precio_actual(symbol):
-    try:
-        precio = float(client.get_symbol_ticker(symbol=symbol)['price'])
-        return precio
-    except Exception as e:
-        logging.error(f"[{symbol}] Error al obtener precio actual: {e}")
-        return 0.0
+    return df
