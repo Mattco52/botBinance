@@ -15,8 +15,8 @@ default_state = {
 }
 
 def ruta_estado(symbol):
-    if not os.path.exists(STATE_DIR):
-        os.makedirs(STATE_DIR)
+    # ✅ Crear la carpeta si no existe, sin lanzar error si ya existe
+    os.makedirs(STATE_DIR, exist_ok=True)
     return os.path.join(STATE_DIR, f"{symbol}_estado.json")
 
 def cargar_estado(symbol):
