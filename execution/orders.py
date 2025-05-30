@@ -23,25 +23,56 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
 
 def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
     cantidad = estado["cantidad_acumulada"]
-    orden = client.order_market_sell(symbol=symbol, quantity=cantidad)
-    estado.update({
-        "estado": False,
-        "order_id": None,
-        "cantidad_acumulada": 0.0,
-        "precio_entrada_promedio": 0.0,
-        "ultima_venta_timestamp": time.time(),
-        "precio_maximo": 0.0,
-    })
-    guardar_estado(symbol, estado)
-    enviar_mensaje(f"🔴 [{symbol}] VENTA ejecutada a {precio_actual:.2f} | RSI: {rsi_actual:.2f} | Razón: {razon}")
+    if cantidad <= 0:
+        enviar_mensaje(f"❌ [{symbol}] No hay cantidad acumulada para vender.")
+        return
+
+    try:
+        orden = client.order_market_sell(symbol=symbol, quantity=cantidad)
+
+        # Calcular ganancia estimada
+        precio_entrada = estado["precio_entrada_promedio"]
+        ganancia_pct = ((precio_actual - precio_entrada) / precio_entrada) * 100
+
+        mensaje = (
+            f"🔴 [{symbol}] VENTA ejecutada a {precio_actual:.2f} | "
+            f"RSI: {rsi_actual:.2f} | Razón: {razon} | "
+            f"📈 Ganancia estimada: {ganancia_pct:.2f}%"
+        )
+        enviar_mensaje(mensaje)
+
+        estado.update({
+            "estado": False,
+            "order_id": None,
+            "cantidad_acumulada": 0.0,
+            "precio_entrada_promedio": 0.0,
+            "ultima_venta_timestamp": time.time(),
+            "precio_maximo": 0.0,
+        })
+        guardar_estado(symbol, estado)
+
+    except Exception as e:
+        print(f"[ERROR] [{symbol}] Error al vender: {e}")
+        enviar_mensaje(f"❌ [{symbol}] Error al vender: {e}")
 
 def verificar_cierre_oco(symbol, estado):
     if not estado["oco_order_ids"]:
         return
+
     for oco_id in estado["oco_order_ids"]:
         try:
             orden = client.get_order(symbol=symbol, orderId=oco_id)
             if orden["status"] == "FILLED":
+                precio_entrada = estado["precio_entrada_promedio"]
+                precio_venta = float(orden["price"])
+                ganancia_pct = ((precio_venta - precio_entrada) / precio_entrada) * 100
+
+                mensaje = (
+                    f"🔴 [{symbol}] OCO completada a {precio_venta:.2f} | "
+                    f"📈 Ganancia estimada: {ganancia_pct:.2f}%"
+                )
+                enviar_mensaje(mensaje)
+
                 estado.update({
                     "estado": False,
                     "oco_order_ids": [],
@@ -51,7 +82,8 @@ def verificar_cierre_oco(symbol, estado):
                     "precio_maximo": 0.0,
                 })
                 guardar_estado(symbol, estado)
-                enviar_mensaje(f"🔴 [{symbol}] OCO completada.")
                 break
+
         except Exception as e:
             print(f"[ERROR] Fallo al verificar OCO ({symbol}): {e}")
+            enviar_mensaje(f"❌ [{symbol}] Error al verificar OCO: {e}")
