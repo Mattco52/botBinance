@@ -19,7 +19,7 @@ PARAMS = {
     'take_profit': 0.4,          # antes 0.5
     'stop_loss': 0.3,            # antes 0.2
     'quantity': 0.001,           # esto será dinámico según symbol con calcular_cantidad_valida()
-    'quantity_factor': 1.15,     # 🔼 nuevo: factor para calcular cantidad más grande
+    'quantity_factor': 3.0,     # 🔼 nuevo: factor para calcular cantidad más grande
 
     # Tiempo entre ciclos
     'sleep_time': 30,
