@@ -40,28 +40,47 @@ def calcular_cantidad_valida(symbol, precio_actual):
         min_notional = None
         step_size = 0.000001
         min_qty = 0.000001
+
         for f in info["filters"]:
-            if f["filterType"] in ["MIN_NOTIONAL", "NOTIONAL"]:
+            if f["filterType"] in ["MIN_NOTIONAL", "NOTIONAL"] and not min_notional:
                 min_notional = float(f.get("minNotional") or f.get("notional"))
             if f["filterType"] == "LOT_SIZE":
                 step_size = float(f["stepSize"])
                 min_qty = float(f["minQty"])
+
         if symbol == "BTCUSDT" and not min_notional:
             min_notional = 10.0
+
         if not min_notional:
             logging.warning(f"[{symbol}] No se encontró filtro de notional.")
             return None
+
+        # Calcular cantidad basada en quantity_factor
         cantidad = (min_notional / precio_actual) * PARAMS.get("quantity_factor", 1.0)
         precision = len(str(step_size).split(".")[1])
         cantidad = round(cantidad, precision)
+
         if cantidad < min_qty:
             cantidad = min_qty
+
         total = round(cantidad * precio_actual, 2)
+
+        # 🔍 Log para debug
+        logging.info(f"[DEBUG] {symbol} | Precio: {precio_actual:.2f} | Cantidad: {cantidad} | Total: {total} | Mínimo: {min_notional}")
+
+        # Forzar mínimo para BTCUSDT si sigue siendo bajo
+        if symbol == "BTCUSDT" and total < min_notional:
+            cantidad = round((min_notional + 1) / precio_actual, precision)
+            total = round(cantidad * precio_actual, 2)
+            logging.info(f"[BTCUSDT] Forzando cantidad a: {cantidad} | Nuevo total: {total}")
+
         if total < min_notional:
             logging.warning(f"[{symbol}] Total insuficiente: {total} < mínimo {min_notional}")
             return None
+
         logging.info(f"[{symbol}] Cantidad calculada: {cantidad} | Total: {total} USDT")
         return cantidad
+
     except Exception as e:
         logging.error(f"[{symbol}] Error al calcular cantidad mínima: {e}")
         return None
