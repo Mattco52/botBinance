@@ -33,6 +33,17 @@ def ejecutar_estrategia(symbol):
 
         logging.info(f"[{symbol}] ⚪ Sin señal clara | EMA OK: {ema_ok} | RSI: {rsi_actual:.2f}")
 
+        # 🔧 COMPRA FORZADA TEMPORAL PARA TESTEO BTCUSDT
+        if symbol == "BTCUSDT" and not estado["estado"]:
+            cantidad = calcular_cantidad_valida(symbol, precio_actual)
+            if cantidad:
+                PARAMS["quantity"] = cantidad
+                comprar(precio_actual, rsi_actual, symbol, estado)
+            else:
+                enviar_mensaje(f"❌ [{symbol}] No se pudo calcular una cantidad válida para la orden.")
+            return
+
+        # ✅ Señal de compra normal
         if not estado["estado"] and ema_ok and rsi_actual < PARAMS["rsi_buy_threshold"]:
             cantidad = calcular_cantidad_valida(symbol, precio_actual)
             if cantidad:
@@ -41,6 +52,7 @@ def ejecutar_estrategia(symbol):
             else:
                 enviar_mensaje(f"❌ [{symbol}] No se pudo calcular una cantidad válida para la orden.")
 
+        # ✅ Señal de venta
         elif estado["estado"]:
             razon = None
             ganancia_pct = ((precio_actual - estado["precio_entrada_promedio"]) / estado["precio_entrada_promedio"]) * 100
