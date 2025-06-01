@@ -3,6 +3,7 @@ from binance.client import Client
 from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
 from notifier.telegram import enviar_mensaje
 from execution.state_manager import guardar_estado
+from logger.logs import log_operacion  # ✅ Registro de operaciones
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
@@ -30,9 +31,13 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
     try:
         orden = client.order_market_sell(symbol=symbol, quantity=cantidad)
 
-        # Calcular ganancia estimada
+        # Calcular ganancia y rendimiento
         precio_entrada = estado["precio_entrada_promedio"]
         ganancia_pct = ((precio_actual - precio_entrada) / precio_entrada) * 100
+        ganancia_total = (precio_actual - precio_entrada) * cantidad
+
+        # ✅ Registrar operación en logs CSV
+        log_operacion(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
 
         mensaje = (
             f"🔴 [{symbol}] VENTA ejecutada a {precio_actual:.2f} | "
@@ -66,6 +71,10 @@ def verificar_cierre_oco(symbol, estado):
                 precio_entrada = estado["precio_entrada_promedio"]
                 precio_venta = float(orden["price"])
                 ganancia_pct = ((precio_venta - precio_entrada) / precio_entrada) * 100
+                ganancia_total = (precio_venta - precio_entrada) * estado["cantidad_acumulada"]
+
+                # ✅ Registrar en logs
+                log_operacion(symbol, precio_entrada, precio_venta, ganancia_total, ganancia_pct, "OCO")
 
                 mensaje = (
                     f"🔴 [{symbol}] OCO completada a {precio_venta:.2f} | "
