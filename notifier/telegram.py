@@ -14,7 +14,7 @@ def enviar_mensaje(texto):
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": texto,
-        "parse_mode": "Markdown"
+        "parse_mode": "MarkdownV2"
     }
 
     try:
