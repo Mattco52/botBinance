@@ -57,7 +57,11 @@ def calcular_cantidad_valida(symbol, precio_actual):
 
         # Calcular cantidad basada en quantity_factor
         cantidad = (min_notional / precio_actual) * PARAMS.get("quantity_factor", 1.0)
-        precision = len(str(step_size).split(".")[1])
+
+        # ✅ Manejar correctamente la precisión del step_size
+        step_str = f"{step_size:.20f}".rstrip("0")
+        precision = len(step_str.split(".")[1]) if "." in step_str else 0
+
         cantidad = round(cantidad, precision)
 
         if cantidad < min_qty:
@@ -65,7 +69,6 @@ def calcular_cantidad_valida(symbol, precio_actual):
 
         total = round(cantidad * precio_actual, 2)
 
-        # 🔍 Log para debug
         logging.info(f"[DEBUG] {symbol} | Precio: {precio_actual:.2f} | Cantidad: {cantidad} | Total: {total} | Mínimo: {min_notional}")
 
         # Forzar mínimo para BTCUSDT si sigue siendo bajo
