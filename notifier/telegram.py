@@ -11,11 +11,11 @@ def enviar_mensaje(texto):
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": texto,
-        "parse_mode": "MarkdownV2"
-    }
+payload = {
+    "chat_id": TELEGRAM_CHAT_ID,
+    "text": texto
+}
+
 
     try:
         response = requests.post(url, json=payload)
