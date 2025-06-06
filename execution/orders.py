@@ -12,6 +12,7 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
     cantidad = PARAMS["quantity"]
     orden = client.order_market_buy(symbol=symbol, quantity=cantidad)
     order_id = orden["orderId"]
+    
     estado.update({
         "estado": True,
         "order_id": order_id,
@@ -20,9 +21,12 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
         "ultima_compra_timestamp": time.time(),
         "precio_maximo": precio_actual,
     })
+    
     guardar_estado(symbol, estado)
     enviar_mensaje(f"🟢 [{symbol}] COMPRA ejecutada a {precio_actual:.2f} | RSI: {rsi_actual:.2f}")
-    log_operacion_google_sheets(symbol, precio_actual, None, None, "")  # Solo registro de compra
+    
+    # ✅ Registrar en Google Sheets solo entrada
+    log_operacion_google_sheets(symbol, precio_actual, "", "", "COMPRA")
 
 def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
     cantidad = estado["cantidad_acumulada"]
@@ -33,14 +37,13 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
     try:
         orden = client.order_market_sell(symbol=symbol, quantity=cantidad)
 
-        # Calcular ganancia y rendimiento
         precio_entrada = estado["precio_entrada_promedio"]
         ganancia_pct = ((precio_actual - precio_entrada) / precio_entrada) * 100
         ganancia_total = (precio_actual - precio_entrada) * cantidad
 
-        # ✅ Registrar operación en CSV y Google Sheets
+        # ✅ Registro en CSV y Sheets
         log_operacion(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
-        log_operacion_google_sheets(symbol, precio_actual, ganancia_total, ganancia_pct, razon)
+        log_operacion_google_sheets(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
 
         mensaje = (
             f"🔴 [{symbol}] VENTA ejecutada a {precio_actual:.2f} | "
@@ -76,9 +79,9 @@ def verificar_cierre_oco(symbol, estado):
                 ganancia_pct = ((precio_venta - precio_entrada) / precio_entrada) * 100
                 ganancia_total = (precio_venta - precio_entrada) * estado["cantidad_acumulada"]
 
-                # ✅ Registrar en CSV y Google Sheets
+                # ✅ Registro en CSV y Sheets
                 log_operacion(symbol, precio_entrada, precio_venta, ganancia_total, ganancia_pct, "OCO")
-                log_operacion_google_sheets(symbol, precio_venta, ganancia_total, ganancia_pct, "OCO")
+                log_operacion_google_sheets(symbol, precio_entrada, precio_venta, ganancia_total, ganancia_pct, "OCO")
 
                 mensaje = (
                     f"🔴 [{symbol}] OCO completada a {precio_venta:.2f} | "
