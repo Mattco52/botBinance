@@ -1,38 +1,39 @@
 import os
 import gspread
+import json
 from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
 
-# Ruta al archivo JSON de credenciales
-CREDENTIALS_FILE = "credentials.json"  # Asegúrate de subirlo a tu proyecto
-SHEET_NAME = "OperacionesBot"      # Cambia al nombre real de tu hoja
+# Definir el alcance
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-def log_operacion_google_sheets(symbol, precio, ganancia, rendimiento, razon=""):
+# Leer las credenciales desde variable de entorno
+json_creds = os.getenv("GOOGLE_CREDENTIALS_JSON")
+
+if not json_creds:
+    raise Exception("Falta la variable de entorno GOOGLE_CREDENTIALS_JSON")
+
+creds_dict = json.loads(json_creds)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+
+# Autenticarse con Google Sheets
+gc = gspread.authorize(creds)
+
+# Abrir hoja por nombre (asegúrate de haber compartido con el correo del servicio)
+SPREADSHEET_NAME = os.getenv("GOOGLE_SHEET_NAME", "TradingBotLogs")
+sheet = gc.open(SPREADSHEET_NAME).sheet1
+
+# Encabezados si es hoja nueva
+ENCABEZADOS = ["timestamp", "symbol", "tipo", "precio_entrada", "precio_salida", "ganancia", "rendimiento", "razon"]
+
+def log_to_sheets(symbol, precio_entrada, precio_salida, ganancia_total, ganancia_pct, razon=""):
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    fila = [timestamp, symbol, "VENTA", f"{precio_entrada:.2f}", f"{precio_salida:.2f}", f"{ganancia_total:.2f}", f"{ganancia_pct:.2f}%", razon]
+    
     try:
-        # Autenticación con Google Sheets
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
-        client = gspread.authorize(creds)
-        sheet = client.open(SHEET_NAME).sheet1
-
-        # Formato de fila
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        tipo = "VENTA" if ganancia is not None else "COMPRA"
-        fila = [
-            timestamp,
-            symbol,
-            tipo,
-            round(precio, 4),
-            f"{ganancia:.2f}" if ganancia is not None else "",
-            f"{rendimiento:.2f}%" if rendimiento is not None else "",
-            razon
-        ]
-
+        if sheet.row_count == 0 or sheet.row_values(1) != ENCABEZADOS:
+            sheet.insert_row(ENCABEZADOS, 1)
         sheet.append_row(fila)
-        print(f"[SHEETS] {tipo} registrada para {symbol}")
-
+        print(f"[GOOGLE SHEETS] Operación registrada: {fila}")
     except Exception as e:
-        print(f"[ERROR] No se pudo registrar en Google Sheets: {e}")
+        print(f"[ERROR] No se pudo registrar en Sheets: {e}")
