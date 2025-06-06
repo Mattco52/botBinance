@@ -20,7 +20,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 gc = gspread.authorize(creds)
 
 # Abrir hoja por nombre (asegúrate de haber compartido con el correo del servicio)
-SPREADSHEET_NAME = os.getenv("GOOGLE_SHEET_NAME", "TradingBotLogs")
+SPREADSHEET_NAME = os.getenv("OperacionesBot", "TradingBotLogs")
 sheet = gc.open(SPREADSHEET_NAME).sheet1
 
 # Encabezados si es hoja nueva
