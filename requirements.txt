@@ -4,3 +4,5 @@ ta
 schedule
 flask
 python-dotenv
+gspread
+oauth2client
