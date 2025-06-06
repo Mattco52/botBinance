@@ -21,12 +21,19 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
         "ultima_compra_timestamp": time.time(),
         "precio_maximo": precio_actual,
     })
-    
+
     guardar_estado(symbol, estado)
     enviar_mensaje(f"🟢 [{symbol}] COMPRA ejecutada a {precio_actual:.2f} | RSI: {rsi_actual:.2f}")
     
-    # ✅ Registrar en Google Sheets solo entrada
-    log_operacion_google_sheets(symbol, precio_actual, "", "", "COMPRA")
+    # ✅ Registrar solo entrada en Google Sheets con valores vacíos coherentes
+    log_operacion_google_sheets(
+        symbol=symbol,
+        precio_entrada=precio_actual,
+        precio_salida="",
+        ganancia_total="",
+        ganancia_pct="",
+        razon="COMPRA"
+    )
 
 def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
     cantidad = estado["cantidad_acumulada"]
@@ -41,7 +48,7 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
         ganancia_pct = ((precio_actual - precio_entrada) / precio_entrada) * 100
         ganancia_total = (precio_actual - precio_entrada) * cantidad
 
-        # ✅ Registro en CSV y Sheets
+        # ✅ Registro en CSV y Google Sheets
         log_operacion(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
         log_operacion_google_sheets(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
 
