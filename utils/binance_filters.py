@@ -1,14 +1,17 @@
+import logging
 import pandas as pd
 from binance.client import Client
 from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
-import logging
 
+# Cliente de Binance
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
-def calcular_ema(serie, window):
+# EMA con pandas
+def calcular_ema(serie: pd.Series, window: int) -> pd.Series:
     return serie.ewm(span=window, adjust=False).mean()
 
-def calcular_rsi(series, window):
+# RSI con pandas
+def calcular_rsi(series: pd.Series, window: int) -> pd.Series:
     delta = series.diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
@@ -17,7 +20,8 @@ def calcular_rsi(series, window):
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-def cumple_min_notional(symbol, precio, cantidad):
+# Verifica si el total cumple con el mínimo notional
+def cumple_min_notional(symbol: str, precio: float, cantidad: float) -> bool:
     try:
         info = client.get_symbol_info(symbol)
         min_notional = None
@@ -25,18 +29,23 @@ def cumple_min_notional(symbol, precio, cantidad):
             if f["filterType"] in ["MIN_NOTIONAL", "NOTIONAL"]:
                 min_notional = float(f.get("minNotional") or f.get("notional"))
                 break
+
         if not min_notional:
             logging.warning(f"[{symbol}] No se encontró filtro de NOTIONAL.")
             return False
+
         total = precio * cantidad
         return total >= min_notional
+
     except Exception as e:
         logging.error(f"[{symbol}] Error al verificar notional: {e}")
         return False
 
-def calcular_cantidad_valida(symbol, precio_actual):
+# Calcula la cantidad válida mínima según precio y filtros
+def calcular_cantidad_valida(symbol: str, precio_actual: float) -> float | None:
     try:
         info = client.get_symbol_info(symbol)
+
         min_notional = None
         step_size = 0.000001
         min_qty = 0.000001
@@ -48,6 +57,7 @@ def calcular_cantidad_valida(symbol, precio_actual):
                 step_size = float(f["stepSize"])
                 min_qty = float(f["minQty"])
 
+        # Fallback para BTCUSDT si no tiene notional
         if symbol == "BTCUSDT" and not min_notional:
             min_notional = 10.0
 
@@ -55,15 +65,15 @@ def calcular_cantidad_valida(symbol, precio_actual):
             logging.warning(f"[{symbol}] No se encontró filtro de notional.")
             return None
 
-        # Calcular cantidad basada en quantity_factor
+        # ✅ Calcular cantidad con factor configurado
         cantidad = (min_notional / precio_actual) * PARAMS.get("quantity_factor", 1.0)
 
-        # ✅ Manejar correctamente la precisión del step_size
+        # ✅ Redondear correctamente la cantidad según el step_size
         step_str = f"{step_size:.20f}".rstrip("0")
         precision = len(step_str.split(".")[1]) if "." in step_str else 0
-
         cantidad = round(cantidad, precision)
 
+        # Validar cantidad mínima
         if cantidad < min_qty:
             cantidad = min_qty
 
