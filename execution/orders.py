@@ -31,15 +31,7 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
 
         guardar_estado(symbol, estado)
         enviar_mensaje(f"🟢 [{symbol}] COMPRA ejecutada a {precio_actual:.2f} | RSI: {rsi_actual:.2f}")
-        
-        log_operacion_google_sheets(
-            symbol=symbol,
-            precio_entrada=precio_actual,
-            precio_salida="",
-            ganancia_total="",
-            ganancia_pct="",
-            razon="COMPRA"
-        )
+
     except Exception as e:
         enviar_mensaje(f"❌ [{symbol}] Error al ejecutar compra: {e}")
         print(f"[ERROR] [{symbol}] Error al comprar: {e}")
@@ -59,7 +51,15 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
         ganancia_total = (precio_actual - precio_entrada) * cantidad
 
         log_operacion(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
-        log_operacion_google_sheets(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
+        log_operacion_google_sheets(
+            symbol=symbol,
+            precio_entrada=precio_entrada,
+            precio_salida=precio_actual,
+            ganancia_total=ganancia_total,
+            ganancia_pct=ganancia_pct,
+            razon=razon,
+            cantidad=cantidad
+        )
 
         mensaje = (
             f"🔴 [{symbol}] VENTA ejecutada a {precio_actual:.2f} | "
@@ -98,7 +98,15 @@ def verificar_cierre_oco(symbol, estado):
                 ganancia_total = (precio_venta - precio_entrada) * cantidad
 
                 log_operacion(symbol, precio_entrada, precio_venta, ganancia_total, ganancia_pct, "OCO")
-                log_operacion_google_sheets(symbol, precio_entrada, precio_venta, ganancia_total, ganancia_pct, "OCO")
+                log_operacion_google_sheets(
+                    symbol=symbol,
+                    precio_entrada=precio_entrada,
+                    precio_salida=precio_venta,
+                    ganancia_total=ganancia_total,
+                    ganancia_pct=ganancia_pct,
+                    razon="OCO",
+                    cantidad=cantidad
+                )
 
                 mensaje = (
                     f"🔴 [{symbol}] OCO completada a {precio_venta:.2f} | "
