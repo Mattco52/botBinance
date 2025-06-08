@@ -5,7 +5,7 @@ from notifier.telegram import enviar_mensaje
 from execution.state_manager import guardar_estado
 from logger.logs import log_operacion
 from logger.sheets_logger import log_operacion_google_sheets
-from binance_filters import calcular_cantidad_valida
+from utils.binance_filters import calcular_cantidad_valida
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
