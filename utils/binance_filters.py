@@ -1,5 +1,6 @@
 import logging
 import pandas as pd
+from decimal import Decimal, ROUND_DOWN
 from binance.client import Client
 from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
 
@@ -47,15 +48,15 @@ def calcular_cantidad_valida(symbol: str, precio_actual: float) -> float | None:
         info = client.get_symbol_info(symbol)
 
         min_notional = None
-        step_size = 0.000001
-        min_qty = 0.000001
+        step_size = "0.000001"
+        min_qty = "0.000001"
 
         for f in info["filters"]:
             if f["filterType"] in ["MIN_NOTIONAL", "NOTIONAL"] and not min_notional:
                 min_notional = float(f.get("minNotional") or f.get("notional"))
             if f["filterType"] == "LOT_SIZE":
-                step_size = float(f["stepSize"])
-                min_qty = float(f["minQty"])
+                step_size = f["stepSize"]
+                min_qty = f["minQty"]
 
         # Fallback para BTCUSDT si no tiene notional
         if symbol == "BTCUSDT" and not min_notional:
@@ -65,34 +66,29 @@ def calcular_cantidad_valida(symbol: str, precio_actual: float) -> float | None:
             logging.warning(f"[{symbol}] No se encontró filtro de notional.")
             return None
 
-        # ✅ Calcular cantidad con factor configurado
-        cantidad = (min_notional / precio_actual) * PARAMS.get("quantity_factor", 1.0)
+        factor = Decimal(str(PARAMS.get("quantity_factor", 1.0)))
+        step_dec = Decimal(step_size)
+        min_qty_dec = Decimal(min_qty)
+        precio_dec = Decimal(str(precio_actual))
+        min_notional_dec = Decimal(str(min_notional))
 
-        # ✅ Redondear correctamente la cantidad según el step_size
-        step_str = f"{step_size:.20f}".rstrip("0")
-        precision = len(step_str.split(".")[1]) if "." in step_str else 0
-        cantidad = round(cantidad, precision)
+        cantidad = (min_notional_dec / precio_dec) * factor
+        cantidad = (cantidad // step_dec) * step_dec  # Redondeo seguro hacia abajo
 
-        # Validar cantidad mínima
-        if cantidad < min_qty:
-            cantidad = min_qty
+        if cantidad < min_qty_dec:
+            cantidad = min_qty_dec
 
-        total = round(cantidad * precio_actual, 2)
+        total = float((cantidad * precio_dec).quantize(Decimal("0.01")))
+        cantidad_float = float(cantidad)
 
-        logging.info(f"[DEBUG] {symbol} | Precio: {precio_actual:.2f} | Cantidad: {cantidad} | Total: {total} | Mínimo: {min_notional}")
+        logging.info(f"[DEBUG] {symbol} | Precio: {precio_actual:.2f} | Cantidad: {cantidad_float} | Total: {total} | Mínimo: {min_notional}")
 
-        # Forzar mínimo para BTCUSDT si sigue siendo bajo
-        if symbol == "BTCUSDT" and total < min_notional:
-            cantidad = round((min_notional + 1) / precio_actual, precision)
-            total = round(cantidad * precio_actual, 2)
-            logging.info(f"[BTCUSDT] Forzando cantidad a: {cantidad} | Nuevo total: {total}")
-
-        if total < min_notional:
+        if total < float(min_notional):
             logging.warning(f"[{symbol}] Total insuficiente: {total} < mínimo {min_notional}")
             return None
 
-        logging.info(f"[{symbol}] Cantidad calculada: {cantidad} | Total: {total} USDT")
-        return cantidad
+        logging.info(f"[{symbol}] Cantidad calculada: {cantidad_float} | Total: {total} USDT")
+        return cantidad_float
 
     except Exception as e:
         logging.error(f"[{symbol}] Error al calcular cantidad mínima: {e}")
