@@ -22,7 +22,6 @@ sheet = gc.open(SPREADSHEET_NAME).sheet1
 ENCABEZADOS = [
     "timestamp",
     "symbol",
-    "tipo",
     "precio_entrada",
     "precio_salida",
     "usdt_invertido",
@@ -32,31 +31,33 @@ ENCABEZADOS = [
     "razon"
 ]
 
-def log_operacion_google_sheets(symbol, precio_entrada, precio_salida=None, ganancia_total=None, ganancia_pct=None, razon="", cantidad=0.0):
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    tipo = "VENTA" if precio_salida else "COMPRA"
-
-    usdt_invertido = round(precio_entrada * cantidad, 2) if tipo == "COMPRA" else ""
-    usdt_recuperado = round(precio_salida * cantidad, 2) if tipo == "VENTA" else ""
-
-    fila = [
-        timestamp,
-        symbol,
-        tipo,
-        f"{precio_entrada:.2f}" if precio_entrada else "",
-        f"{precio_salida:.2f}" if precio_salida else "",
-        usdt_invertido,
-        usdt_recuperado,
-        f"{ganancia_total:.2f}" if ganancia_total is not None else "",
-        f"{ganancia_pct:.2f}%" if ganancia_pct is not None else "",
-        razon
-    ]
-
+def log_operacion_google_sheets(symbol, precio_entrada, precio_salida, ganancia_total, ganancia_pct, razon="", cantidad=0.0):
+    """
+    Registra solo operaciones de VENTA en Google Sheets.
+    """
     try:
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        usdt_invertido = round(precio_entrada * cantidad, 2)
+        usdt_recuperado = round(precio_salida * cantidad, 2)
+
+        fila = [
+            timestamp,
+            symbol,
+            f"{precio_entrada:.2f}",
+            f"{precio_salida:.2f}",
+            usdt_invertido,
+            usdt_recuperado,
+            f"{ganancia_total:.2f}",
+            f"{ganancia_pct:.2f}%",
+            razon
+        ]
+
         existing_headers = sheet.row_values(1)
         if existing_headers != ENCABEZADOS:
             sheet.insert_row(ENCABEZADOS, 1)
+
         sheet.append_row(fila)
-        print(f"[GOOGLE SHEETS] Operación registrada: {fila}")
+        print(f"[GOOGLE SHEETS] ✅ VENTA registrada: {fila}")
+
     except Exception as e:
-        print(f"[ERROR] No se pudo registrar en Sheets: {e}")
+        print(f"[ERROR] ❌ No se pudo registrar en Sheets: {e}")
