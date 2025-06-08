@@ -7,6 +7,7 @@ from logger.logs import log_operacion
 from logger.sheets_logger import log_operacion_google_sheets
 from utils.binance_filters import calcular_cantidad_valida
 
+# Inicializar cliente Binance
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
 def comprar(precio_actual, rsi_actual, symbol, estado):
@@ -30,6 +31,7 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
         })
 
         guardar_estado(symbol, estado)
+
         enviar_mensaje(f"🟢 [{symbol}] COMPRA ejecutada a {precio_actual:.2f} | RSI: {rsi_actual:.2f}")
 
     except Exception as e:
@@ -76,6 +78,7 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
             "ultima_venta_timestamp": time.time(),
             "precio_maximo": 0.0,
         })
+
         guardar_estado(symbol, estado)
 
     except Exception as e:
@@ -122,6 +125,7 @@ def verificar_cierre_oco(symbol, estado):
                     "ultima_venta_timestamp": time.time(),
                     "precio_maximo": 0.0,
                 })
+
                 guardar_estado(symbol, estado)
                 break
 
