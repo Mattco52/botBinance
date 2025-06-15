@@ -20,7 +20,7 @@ PARAMS = {
     'stop_loss': 0.3,            # antes 0.2
 
     # ❌ Eliminamos 'quantity' (ya no se usa directamente)
-    'quantity_factor': 3.0,      # 🔼 Factor para calcular cantidad mínima * factor
+    'quantity_factor': 6.0,      # 🔼 Factor para calcular cantidad mínima * factor
 
     # Tiempo entre ciclos
     'sleep_time': 30,
