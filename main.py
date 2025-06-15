@@ -8,7 +8,7 @@ from notifier.logger import configurar_logger
 from reporter.diario import enviar_resumen_diario  # ✅ NUEVO
 
 # ✅ Lista de símbolos a operar
-SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "AVAXUSDT"]
+SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT" ] # "AVAXUSDT",  "BNBUSDT" deshabilitados por baja rentabilidad
 
 # ✅ Tiempo entre ciclos de estrategia
 SLEEP_TIME = 30
