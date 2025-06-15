@@ -4,7 +4,7 @@ from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
 from data.market_data import obtener_datos
 from utils.binance_filters import calcular_ema, calcular_rsi, calcular_cantidad_valida
 from notifier.telegram import enviar_mensaje
-from execution.orders import comprar, vender, verificar_cierre_oco
+from execution.orders import comprar, vender, verificar_cierre_oco, verificar_trailing_stop
 from execution.state_manager import cargar_estado
 
 client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
@@ -44,14 +44,13 @@ def ejecutar_estrategia(symbol):
         elif estado["estado"]:
             razon = None
             ganancia_pct = ((precio_actual - estado["precio_entrada_promedio"]) / estado["precio_entrada_promedio"]) * 100
+
             if rsi_actual > PARAMS["rsi_sell_threshold"]:
                 razon = "RSI alto"
             elif PARAMS["use_trailing_stop"]:
-                if precio_actual > estado["precio_maximo"]:
-                    estado["precio_maximo"] = precio_actual
-                limite_stop = estado["precio_maximo"] * (1 - PARAMS["trailing_stop_pct"] / 100)
-                if precio_actual < limite_stop:
-                    razon = "Trailing Stop alcanzado"
+                if verificar_trailing_stop(symbol, precio_actual, estado):
+                    vender(precio_actual, rsi_actual, symbol, estado, razon="Trailing Stop / Break-even")
+                    return  # corta ejecución para evitar doble venta
             else:
                 if ganancia_pct >= PARAMS["take_profit"]:
                     razon = "Take Profit alcanzado"
