@@ -57,3 +57,6 @@ def enviar_resumen_diario():
 
     except Exception as e:
         enviar_mensaje(f"❌ Error en resumen diario:\n{str(e)}")
+
+        if __name__ == "__main__":
+            enviar_resumen_diario()
