@@ -85,36 +85,28 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
         enviar_mensaje(f"❌ [{symbol}] Error al vender: {e}")
         print(f"[ERROR] [{symbol}] Error al vender: {e}")
 
-def verificar_trailing_stop(symbol, precio_actual, estado):
+def verificar_trailing_stop(symbol, precio_actual, estado, trailing_pct=0.003):
     if not estado.get("estado"):
         return False
 
     precio_entrada = estado.get("precio_entrada_promedio", 0.0)
     precio_maximo = estado.get("precio_maximo", precio_entrada)
 
-    # Actualizar el máximo si se supera
+    # Actualizar precio máximo si se supera
     if precio_actual > precio_maximo:
         estado["precio_maximo"] = precio_actual
         guardar_estado(symbol, estado)
 
-    # Parámetros específicos para ETH
+    # Break-even específico para ETHUSDT
     if symbol == "ETHUSDT":
-        trailing_pct = 0.007  # 0.7%
         break_even_trigger = 0.005  # 0.5%
-
-        # Lógica de break-even
         if precio_actual >= precio_entrada * (1 + break_even_trigger):
             if precio_actual <= precio_entrada:
                 return True  # cerrar por break-even
 
-        if precio_actual <= precio_maximo * (1 - trailing_pct):
-            return True  # cerrar por trailing ETH
-
-    else:
-        trailing_pct = 0.003  # 0.3% para los demás
-
-        if precio_actual <= precio_maximo * (1 - trailing_pct):
-            return True  # cerrar por trailing normal
+    # Aplicar trailing stop general (incluye personalizados por símbolo desde strategy.py)
+    if precio_actual <= precio_maximo * (1 - trailing_pct):
+        return True
 
     return False
 
