@@ -3,7 +3,6 @@ import json
 import gspread
 from datetime import datetime
 from collections import defaultdict
-from tempfile import NamedTemporaryFile
 from oauth2client.service_account import ServiceAccountCredentials
 from notifier.telegram import enviar_mensaje
 
@@ -11,30 +10,21 @@ from notifier.telegram import enviar_mensaje
 SHEET_NAME = "OperacionesBot"
 TABLA_LOGS = "TradingBotLogs"
 
-# Columnas en tu hoja de cálculo
+# 🗂 Columnas en tu hoja de cálculo
 COL_TIMESTAMP = 0
 COL_SYMBOL = 1
 COL_GANANCIA = 6
 
-# 🛡️ Autenticación segura desde entorno
+# 🔐 Cargar credenciales desde variable de entorno
+creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds_json_str = os.getenv("GOOGLE_CREDS_JSON")
-
-if not creds_json_str:
-    raise ValueError("❌ Falta la variable de entorno GOOGLE_CREDS_JSON")
-
-with NamedTemporaryFile(mode="w+", suffix=".json", delete=False) as tmp_file:
-    tmp_file.write(creds_json_str)
-    tmp_file.flush()
-    tmp_file_path = tmp_file.name
-
-creds = ServiceAccountCredentials.from_json_keyfile_name(tmp_file_path, scope)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
 def enviar_resumen_diario():
     try:
         hoja = client.open(SHEET_NAME).worksheet(TABLA_LOGS)
-        registros = hoja.get_all_values()[1:]  # saltar encabezado
+        registros = hoja.get_all_values()[1:]  # omitir encabezado
 
         hoy = datetime.utcnow().date()
         resumen = defaultdict(lambda: {"ganancia": 0.0, "operaciones": 0})
@@ -74,6 +64,6 @@ def enviar_resumen_diario():
     except Exception as e:
         enviar_mensaje(f"❌ Error en resumen diario:\n{str(e)}")
 
-# 🧪 Permite ejecutar manualmente
+# 🧪 Para ejecución manual
 if __name__ == "__main__":
     enviar_resumen_diario()
