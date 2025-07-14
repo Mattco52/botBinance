@@ -24,24 +24,22 @@ def obtener_datos(symbol, timeframe):
         'taker_buy_base', 'taker_buy_quote', 'ignore'
     ])
 
-    # Validación de columnas clave antes de convertir
+    # Convertir columnas numéricas con validación
     for col in ['close', 'high', 'low']:
-        if not pd.to_numeric(df[col], errors='coerce').notnull().all():
-            logging.error(f"[{symbol}] ❌ Datos corruptos en columna '{col}': {df[col].to_list()}")
-            return None
+        df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # Conversión segura
-    df['close'] = pd.to_numeric(df['close'], errors='coerce')
-    df['high'] = pd.to_numeric(df['high'], errors='coerce')
-    df['low'] = pd.to_numeric(df['low'], errors='coerce')
+    # Eliminar filas con datos inválidos
+    df.dropna(subset=['close', 'high', 'low'], inplace=True)
+
+    # Validar si hay suficientes datos tras limpieza
+    min_required = max(PARAMS['ema_short'], PARAMS['ema_long'], PARAMS['rsi_window']) + 1
+    if len(df) < min_required:
+        logging.error(f"[{symbol}] ❌ Insuficientes datos válidos tras limpieza: {len(df)} filas")
+        return None
 
     # Calcular indicadores
     df['ema_short'] = EMAIndicator(df['close'], window=PARAMS['ema_short']).ema_indicator()
     df['ema_long'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
     df['rsi'] = RSIIndicator(df['close'], window=PARAMS['rsi_window']).rsi()
-
-    if df.empty:
-        logging.warning(f"[{symbol}] No hay datos en el DataFrame.")
-        return None
 
     return df
