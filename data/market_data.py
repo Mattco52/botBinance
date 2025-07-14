@@ -24,9 +24,16 @@ def obtener_datos(symbol, timeframe):
         'taker_buy_base', 'taker_buy_quote', 'ignore'
     ])
 
-    df['close'] = pd.to_numeric(df['close'])
-    df['high'] = pd.to_numeric(df['high'])
-    df['low'] = pd.to_numeric(df['low'])
+    # Validación de columnas clave antes de convertir
+    for col in ['close', 'high', 'low']:
+        if not pd.to_numeric(df[col], errors='coerce').notnull().all():
+            logging.error(f"[{symbol}] ❌ Datos corruptos en columna '{col}': {df[col].to_list()}")
+            return None
+
+    # Conversión segura
+    df['close'] = pd.to_numeric(df['close'], errors='coerce')
+    df['high'] = pd.to_numeric(df['high'], errors='coerce')
+    df['low'] = pd.to_numeric(df['low'], errors='coerce')
 
     # Calcular indicadores
     df['ema_short'] = EMAIndicator(df['close'], window=PARAMS['ema_short']).ema_indicator()
