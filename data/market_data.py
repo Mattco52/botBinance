@@ -15,10 +15,21 @@ def obtener_datos(symbol, timeframe):
             start_str="24 hours ago UTC"
         )
 
-        # Validar que cada kline tenga exactamente 12 elementos
-        klines_validos = [k for k in klines if isinstance(k, list) and len(k) == 12]
+        # Convertir y validar cada línea de datos
+        datos_limpios = []
+        for k in klines:
+            if isinstance(k, list) and len(k) == 12:
+                try:
+                    fila = [
+                        int(k[0]), float(k[1]), float(k[2]), float(k[3]),
+                        float(k[4]), float(k[5]), int(k[6]), float(k[7]),
+                        int(k[8]), float(k[9]), float(k[10]), str(k[11])
+                    ]
+                    datos_limpios.append(fila)
+                except (ValueError, TypeError):
+                    continue
 
-        df = pd.DataFrame(klines_validos, columns=[
+        df = pd.DataFrame(datos_limpios, columns=[
             'timestamp', 'open', 'high', 'low', 'close', 'volume',
             'close_time', 'quote_asset_volume', 'number_of_trades',
             'taker_buy_base', 'taker_buy_quote', 'ignore'
@@ -28,16 +39,8 @@ def obtener_datos(symbol, timeframe):
         logging.error(f"[{symbol}] Error al obtener klines: {e}")
         return None
 
-    # Convertir columnas a numérico y eliminar NaNs
-    for col in ['close', 'high', 'low']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    df.dropna(subset=['close', 'high', 'low'], inplace=True)
-
-    # Validar cantidad mínima de datos
-    min_req = max(PARAMS['ema_short'], PARAMS['ema_long'], PARAMS['rsi_window']) + 1
-    if len(df) < min_req:
-        logging.warning(f"[{symbol}] No hay suficientes datos después del filtrado.")
+    if df.empty:
+        logging.warning(f"[{symbol}] No hay datos válidos para {symbol}.")
         return None
 
     # Calcular indicadores
