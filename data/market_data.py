@@ -15,10 +15,10 @@ def obtener_datos(symbol, timeframe):
             start_str="24 hours ago UTC"
         )
 
-        # Validar que cada kline tenga al menos 6 valores necesarios
-        klines_filtrados = [k for k in klines if len(k) >= 6]
+        # Validar que cada kline tenga exactamente 12 elementos
+        klines_validos = [k for k in klines if isinstance(k, list) and len(k) == 12]
 
-        df = pd.DataFrame(klines_filtrados, columns=[
+        df = pd.DataFrame(klines_validos, columns=[
             'timestamp', 'open', 'high', 'low', 'close', 'volume',
             'close_time', 'quote_asset_volume', 'number_of_trades',
             'taker_buy_base', 'taker_buy_quote', 'ignore'
@@ -28,19 +28,19 @@ def obtener_datos(symbol, timeframe):
         logging.error(f"[{symbol}] Error al obtener klines: {e}")
         return None
 
-    # Convertir a numéricos solo las columnas necesarias
+    # Convertir columnas a numérico y eliminar NaNs
     for col in ['close', 'high', 'low']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
     df.dropna(subset=['close', 'high', 'low'], inplace=True)
 
-    # Validar que haya suficientes datos para indicadores
-    min_required = max(PARAMS['ema_short'], PARAMS['ema_long'], PARAMS['rsi_window']) + 1
-    if len(df) < min_required:
-        logging.error(f"[{symbol}] ❌ Insuficientes datos válidos tras limpieza: {len(df)} filas")
+    # Validar cantidad mínima de datos
+    min_req = max(PARAMS['ema_short'], PARAMS['ema_long'], PARAMS['rsi_window']) + 1
+    if len(df) < min_req:
+        logging.warning(f"[{symbol}] No hay suficientes datos después del filtrado.")
         return None
 
-    # Calcular indicadores técnicos
+    # Calcular indicadores
     df['ema_short'] = EMAIndicator(df['close'], window=PARAMS['ema_short']).ema_indicator()
     df['ema_long'] = EMAIndicator(df['close'], window=PARAMS['ema_long']).ema_indicator()
     df['rsi'] = RSIIndicator(df['close'], window=PARAMS['rsi_window']).rsi()
