@@ -6,7 +6,7 @@ load_dotenv()
 # Parámetros del bot
 PARAMS = {
     'symbol': 'BTCUSDT',
-    'timeframe': '5m',
+    'timeframe': '15m',
     'ema_short': 9,
     'ema_long': 21,
     'rsi_window': 14,
@@ -23,7 +23,7 @@ PARAMS = {
     'quantity_factor': 200.0,      # 🔼 Factor para calcular cantidad mínima * factor
 
     # Tiempo entre ciclos
-    'sleep_time': 30,
+    'sleep_time': 60,
 
     # Orden OCO
     'use_oco': False,
