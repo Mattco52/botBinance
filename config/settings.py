@@ -16,11 +16,11 @@ PARAMS = {
     'rsi_sell_threshold': 55,    # antes 60
 
     # Gestión de riesgo
-    'take_profit': 0.4,          # antes 0.5
-    'stop_loss': 0.3,            # antes 0.2
+    'take_profit': 1.2,          # antes 0.5
+    'stop_loss': 0.6,            # antes 0.2
 
     # ❌ Eliminamos 'quantity' (ya no se usa directamente)
-    'quantity_factor': 60.0,      # 🔼 Factor para calcular cantidad mínima * factor
+    'quantity_factor': 200.0,      # 🔼 Factor para calcular cantidad mínima * factor
 
     # Tiempo entre ciclos
     'sleep_time': 30,
