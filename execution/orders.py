@@ -17,10 +17,6 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
         enviar_mensaje(f"❌ [{symbol}] No se pudo calcular cantidad válida para compra.")
         return
 
-    if estado.get("estado"):
-        enviar_mensaje(f"⚠️ [{symbol}] Ya hay una posición abierta. Compra evitada.")
-        return
-
     try:
         orden = client.order_market_buy(symbol=symbol, quantity=cantidad)
         order_id = orden["orderId"]
@@ -36,7 +32,13 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
 
         guardar_estado(symbol, estado)
 
-        enviar_mensaje(f"🟢 [{symbol}] COMPRA ejecutada a {precio_actual:.2f} | RSI: {rsi_actual:.2f}")
+        mensaje = (
+            f"🟢 [{symbol}] COMPRA ejecutada\n"
+            f"📍 Precio: {precio_actual:.2f} USDT\n"
+            f"📊 RSI: {rsi_actual:.2f}\n"
+            f"📦 Cantidad: {cantidad}"
+        )
+        enviar_mensaje(mensaje)
 
     except Exception as e:
         enviar_mensaje(f"❌ [{symbol}] Error al ejecutar compra: {e}")
@@ -75,9 +77,12 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
         )
 
         mensaje = (
-            f"🔴 [{symbol}] VENTA ejecutada a {precio_actual:.2f} | "
-            f"RSI: {rsi_actual:.2f} | Razón: {razon} | "
-            f"📈 Ganancia neta: {ganancia_pct:.2f}% | 💵 {ganancia_total:.2f} USD"
+            f"🔴 [{symbol}] VENTA ejecutada\n"
+            f"📍 Precio: {precio_actual:.2f} USDT\n"
+            f"📊 RSI: {rsi_actual:.2f}\n"
+            f"💬 Razón: {razon}\n"
+            f"📈 Ganancia neta: {ganancia_pct:.2f}%\n"
+            f"💵 Ganancia: {ganancia_total:.2f} USDT"
         )
         enviar_mensaje(mensaje)
 
@@ -152,8 +157,11 @@ def verificar_cierre_oco(symbol, estado):
                 )
 
                 mensaje = (
-                    f"🔴 [{symbol}] OCO completada a {precio_venta:.2f} | "
-                    f"📈 Ganancia neta: {ganancia_pct:.2f}% | 💵 {ganancia_total:.2f} USD"
+                    f"🔴 [{symbol}] OCO completada\n"
+                    f"📍 Precio: {precio_venta:.2f} USDT\n"
+                    f"💬 Razón: OCO\n"
+                    f"📈 Ganancia neta: {ganancia_pct:.2f}%\n"
+                    f"💵 Ganancia: {ganancia_total:.2f} USDT"
                 )
                 enviar_mensaje(mensaje)
 
