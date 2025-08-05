@@ -12,9 +12,13 @@ client = Client(API_KEY, SECRET_KEY, testnet=TESTNET)
 
 def comprar(precio_actual, rsi_actual, symbol, estado):
     cantidad = calcular_cantidad_valida(symbol, precio_actual)
-    
+
     if not cantidad:
         enviar_mensaje(f"❌ [{symbol}] No se pudo calcular cantidad válida para compra.")
+        return
+
+    if estado.get("estado"):
+        enviar_mensaje(f"⚠️ [{symbol}] Ya hay una posición abierta. Compra evitada.")
         return
 
     try:
@@ -40,7 +44,7 @@ def comprar(precio_actual, rsi_actual, symbol, estado):
 
 def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
     cantidad = estado.get("cantidad_acumulada", 0.0)
-    
+
     if cantidad <= 0:
         enviar_mensaje(f"❌ [{symbol}] No hay cantidad acumulada para vender.")
         return
@@ -49,15 +53,15 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
         orden = client.order_market_sell(symbol=symbol, quantity=cantidad)
 
         precio_entrada = estado.get("precio_entrada_promedio", 0.0)
-        ganancia_pct = ((precio_actual - precio_entrada) / precio_entrada) * 100
         ganancia_total = (precio_actual - precio_entrada) * cantidad
 
-        # 🧾 Simular comisiones de compra y venta (0.075% + 0.075%)
         if PARAMS.get("simular_comisiones", False):
             costo_compra = precio_entrada * cantidad
             costo_venta = precio_actual * cantidad
             comision_total = (costo_compra + costo_venta) * 0.00075
             ganancia_total -= comision_total
+
+        ganancia_pct = (ganancia_total / (precio_entrada * cantidad)) * 100
 
         log_operacion(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
         log_operacion_google_sheets(
@@ -73,7 +77,7 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
         mensaje = (
             f"🔴 [{symbol}] VENTA ejecutada a {precio_actual:.2f} | "
             f"RSI: {rsi_actual:.2f} | Razón: {razon} | "
-            f"📈 Ganancia estimada: {ganancia_pct:.2f}%"
+            f"📈 Ganancia neta: {ganancia_pct:.2f}% | 💵 {ganancia_total:.2f} USD"
         )
         enviar_mensaje(mensaje)
 
@@ -126,7 +130,6 @@ def verificar_cierre_oco(symbol, estado):
                 precio_venta = float(orden["price"])
                 cantidad = estado.get("cantidad_acumulada", 0.0)
 
-                ganancia_pct = ((precio_venta - precio_entrada) / precio_entrada) * 100
                 ganancia_total = (precio_venta - precio_entrada) * cantidad
 
                 if PARAMS.get("simular_comisiones", False):
@@ -134,6 +137,8 @@ def verificar_cierre_oco(symbol, estado):
                     costo_venta = precio_venta * cantidad
                     comision_total = (costo_compra + costo_venta) * 0.00075
                     ganancia_total -= comision_total
+
+                ganancia_pct = (ganancia_total / (precio_entrada * cantidad)) * 100
 
                 log_operacion(symbol, precio_entrada, precio_venta, ganancia_total, ganancia_pct, "OCO")
                 log_operacion_google_sheets(
@@ -148,7 +153,7 @@ def verificar_cierre_oco(symbol, estado):
 
                 mensaje = (
                     f"🔴 [{symbol}] OCO completada a {precio_venta:.2f} | "
-                    f"📈 Ganancia estimada: {ganancia_pct:.2f}%"
+                    f"📈 Ganancia neta: {ganancia_pct:.2f}% | 💵 {ganancia_total:.2f} USD"
                 )
                 enviar_mensaje(mensaje)
 
