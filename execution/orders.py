@@ -1,6 +1,6 @@
 import time
 from binance.client import Client
-from config.settings import API_KEY, SECRET_KEY, TESTNET
+from config.settings import API_KEY, SECRET_KEY, TESTNET, PARAMS
 from notifier.telegram import enviar_mensaje
 from execution.state_manager import guardar_estado
 from logger.logs import log_operacion
@@ -52,6 +52,13 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
         ganancia_pct = ((precio_actual - precio_entrada) / precio_entrada) * 100
         ganancia_total = (precio_actual - precio_entrada) * cantidad
 
+        # 🧾 Simular comisiones de compra y venta (0.075% + 0.075%)
+        if PARAMS.get("simular_comisiones", False):
+            costo_compra = precio_entrada * cantidad
+            costo_venta = precio_actual * cantidad
+            comision_total = (costo_compra + costo_venta) * 0.00075
+            ganancia_total -= comision_total
+
         log_operacion(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
         log_operacion_google_sheets(
             symbol=symbol,
@@ -92,19 +99,16 @@ def verificar_trailing_stop(symbol, precio_actual, estado, trailing_pct=0.003):
     precio_entrada = estado.get("precio_entrada_promedio", 0.0)
     precio_maximo = estado.get("precio_maximo", precio_entrada)
 
-    # Actualizar precio máximo si se supera
     if precio_actual > precio_maximo:
         estado["precio_maximo"] = precio_actual
         guardar_estado(symbol, estado)
 
-    # Break-even específico para ETHUSDT
     if symbol == "ETHUSDT":
-        break_even_trigger = 0.005  # 0.5%
+        break_even_trigger = 0.005
         if precio_actual >= precio_entrada * (1 + break_even_trigger):
             if precio_actual <= precio_entrada:
-                return True  # cerrar por break-even
+                return True
 
-    # Aplicar trailing stop general (incluye personalizados por símbolo desde strategy.py)
     if precio_actual <= precio_maximo * (1 - trailing_pct):
         return True
 
@@ -124,6 +128,12 @@ def verificar_cierre_oco(symbol, estado):
 
                 ganancia_pct = ((precio_venta - precio_entrada) / precio_entrada) * 100
                 ganancia_total = (precio_venta - precio_entrada) * cantidad
+
+                if PARAMS.get("simular_comisiones", False):
+                    costo_compra = precio_entrada * cantidad
+                    costo_venta = precio_venta * cantidad
+                    comision_total = (costo_compra + costo_venta) * 0.00075
+                    ganancia_total -= comision_total
 
                 log_operacion(symbol, precio_entrada, precio_venta, ganancia_total, ganancia_pct, "OCO")
                 log_operacion_google_sheets(
