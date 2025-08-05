@@ -30,7 +30,8 @@ PARAMS = {
 
     # Trailing Stop dinámico
     'use_trailing_stop': True,
-    'trailing_stop_pct': 0.25
+    'trailing_stop_pct': 0.25,
+    'simular_comisiones': True  # 🔁 para testnet más realista
 }
 
 # Claves API y entorno
