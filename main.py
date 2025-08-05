@@ -11,7 +11,7 @@ from reporter.diario import enviar_resumen_diario  # ✅ Envío de resumen diari
 SYMBOLS = ["BTCUSDT"]
 
 # ✅ Tiempo entre ciclos de ejecución por símbolo (en segundos)
-SLEEP_TIME = 30
+SLEEP_TIME = 60
 
 # ✅ Hilo de ejecución del bot por símbolo
 def run_bot(symbol):
