@@ -55,37 +55,45 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
         orden = client.order_market_sell(symbol=symbol, quantity=cantidad)
 
         precio_entrada = estado.get("precio_entrada_promedio", 0.0)
-        ganancia_total = (precio_actual - precio_entrada) * cantidad
 
+        # Cálculos de P&L
+        ganancia_bruta = (precio_actual - precio_entrada) * cantidad
+        comision_total = 0.0
         if PARAMS.get("simular_comisiones", False):
             costo_compra = precio_entrada * cantidad
             costo_venta = precio_actual * cantidad
-            comision_total = (costo_compra + costo_venta) * 0.00075
-            ganancia_total -= comision_total
+            comision_total = (costo_compra + costo_venta) * 0.00075  # 0.075% + 0.075%
+        ganancia_neta = ganancia_bruta - comision_total
 
-        ganancia_pct = (ganancia_total / (precio_entrada * cantidad)) * 100
+        # % neto sobre capital invertido
+        capital = max(precio_entrada * cantidad, 1e-8)
+        ganancia_pct = (ganancia_neta / capital) * 100
 
-        log_operacion(symbol, precio_entrada, precio_actual, ganancia_total, ganancia_pct, razon)
+        # Logs (se registran valores netos)
+        log_operacion(symbol, precio_entrada, precio_actual, ganancia_neta, ganancia_pct, razon)
         log_operacion_google_sheets(
             symbol=symbol,
             precio_entrada=precio_entrada,
             precio_salida=precio_actual,
-            ganancia_total=ganancia_total,
+            ganancia_total=ganancia_neta,
             ganancia_pct=ganancia_pct,
             razon=razon,
             cantidad=cantidad
         )
 
+        # Mensaje a Telegram detallado
         mensaje = (
             f"🔴 [{symbol}] VENTA ejecutada\n"
             f"📍 Precio: {precio_actual:.2f} USDT\n"
             f"📊 RSI: {rsi_actual:.2f}\n"
             f"💬 Razón: {razon}\n"
-            f"📈 Ganancia neta: {ganancia_pct:.2f}%\n"
-            f"💵 Ganancia: {ganancia_total:.2f} USDT"
+            f"📈 Ganancia bruta: {ganancia_bruta:.2f} USDT\n"
+            f"💸 Comisión estimada: {comision_total:.2f} USDT\n"
+            f"💵 Ganancia neta: {ganancia_neta:.2f} USDT ({ganancia_pct:.2f}%)"
         )
         enviar_mensaje(mensaje)
 
+        # Reset de estado
         estado.update({
             "estado": False,
             "order_id": None,
@@ -94,7 +102,6 @@ def vender(precio_actual, rsi_actual, symbol, estado, razon="Señal de venta"):
             "ultima_venta_timestamp": time.time(),
             "precio_maximo": 0.0,
         })
-
         guardar_estado(symbol, estado)
 
     except Exception as e:
@@ -135,36 +142,42 @@ def verificar_cierre_oco(symbol, estado):
                 precio_venta = float(orden["price"])
                 cantidad = estado.get("cantidad_acumulada", 0.0)
 
-                ganancia_total = (precio_venta - precio_entrada) * cantidad
-
+                # Cálculos de P&L
+                ganancia_bruta = (precio_venta - precio_entrada) * cantidad
+                comision_total = 0.0
                 if PARAMS.get("simular_comisiones", False):
                     costo_compra = precio_entrada * cantidad
                     costo_venta = precio_venta * cantidad
                     comision_total = (costo_compra + costo_venta) * 0.00075
-                    ganancia_total -= comision_total
+                ganancia_neta = ganancia_bruta - comision_total
 
-                ganancia_pct = (ganancia_total / (precio_entrada * cantidad)) * 100
+                capital = max(precio_entrada * cantidad, 1e-8)
+                ganancia_pct = (ganancia_neta / capital) * 100
 
-                log_operacion(symbol, precio_entrada, precio_venta, ganancia_total, ganancia_pct, "OCO")
+                # Logs netos
+                log_operacion(symbol, precio_entrada, precio_venta, ganancia_neta, ganancia_pct, "OCO")
                 log_operacion_google_sheets(
                     symbol=symbol,
                     precio_entrada=precio_entrada,
                     precio_salida=precio_venta,
-                    ganancia_total=ganancia_total,
+                    ganancia_total=ganancia_neta,
                     ganancia_pct=ganancia_pct,
                     razon="OCO",
                     cantidad=cantidad
                 )
 
+                # Mensaje a Telegram detallado
                 mensaje = (
                     f"🔴 [{symbol}] OCO completada\n"
                     f"📍 Precio: {precio_venta:.2f} USDT\n"
                     f"💬 Razón: OCO\n"
-                    f"📈 Ganancia neta: {ganancia_pct:.2f}%\n"
-                    f"💵 Ganancia: {ganancia_total:.2f} USDT"
+                    f"📈 Ganancia bruta: {ganancia_bruta:.2f} USDT\n"
+                    f"💸 Comisión estimada: {comision_total:.2f} USDT\n"
+                    f"💵 Ganancia neta: {ganancia_neta:.2f} USDT ({ganancia_pct:.2f}%)"
                 )
                 enviar_mensaje(mensaje)
 
+                # Reset de estado
                 estado.update({
                     "estado": False,
                     "oco_order_ids": [],
@@ -173,7 +186,6 @@ def verificar_cierre_oco(symbol, estado):
                     "ultima_venta_timestamp": time.time(),
                     "precio_maximo": 0.0,
                 })
-
                 guardar_estado(symbol, estado)
                 break
 
